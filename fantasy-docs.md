@@ -239,8 +239,6 @@ enum Option a = None | Some(a)
 
 This enum has two variants. Either it is `None` or it's `Some`, and if it's `Some` then it also has a value of type `a` (see the "Type variables" section above).
 
-There is also `enum Result t e = Ok(t) | Err(e)`, which is a useful way to express operations that might succeed or fail with an error value. Option and Result work just like they do in other languages (see Java, Swift, Rust, Haskell, Elm).
-
 ## Syntax
 
 ### Functions
@@ -410,7 +408,7 @@ let
     actual = 100/10;
 in assert_eq(expected, actual)
 ```
-Tests are run in parallel, because there's no way for two tests to interfere with each other. Test functions cannot take parameters, nor can they return values. If you want to automate tests, consider using smaller functions.
+The `assert_eq` function will fail the test if the arguments aren't equal. There are similar functions like `assert()` which just checks if its argument is true, or `assert_ne()` which asserts the two are not equal. Tests are run in parallel, because there's no way for two tests to interfere with each other. Test functions cannot take parameters, nor can they return values. If you want to automate tests, consider using smaller functions.
 
 ```kcl
 #[test]
