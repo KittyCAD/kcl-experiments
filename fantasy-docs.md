@@ -306,7 +306,7 @@ Every KCL function body is a single expression. If a function body gets really b
 ```kcl
 let
   can_radius = Cm(10)
-  can_height = can_height * 5
+  can_height = can_radius * 5
 in can_of_beans(can_radius, can_height)
 ```
 
