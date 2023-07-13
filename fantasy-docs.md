@@ -306,7 +306,7 @@ Every KCL function body is a single expression. If a function body gets really b
 ```kcl
 let
   can_radius = Cm(10)
-  can_height = Ft(1)
+  can_height = can_height * 5
 in can_of_beans(can_radius, can_height)
 ```
 
@@ -347,7 +347,7 @@ doubleDistance = (d: Distance) =>
     d * 2
 
 doubleAllDistances = (distances: List Distance -> List Distance) =>
-    List.map doubleDistance distances
+    List.map(doubleDistance, distances)
 ```
 Here, the `doubleAllDistances` function takes a list of distances and returns a list where all distances are doubled. It does this using the standard library function `List.map`. This takes two parameters:
 
@@ -358,7 +358,7 @@ This is neat. You can do a lot with standard library functions like this. Howeve
 
 ```kcl
 doubleAllDistances = (distances: List Distance -> List Distance) =>
-    List.map ((x) => x * 2) distances
+    List.map((x) => x * 2, distances)
 ```
 
 In this version, we've replaced the named function `doubleDistance` with an _anonymous function_ (also known as a _closure_). These closures use the same syntax for function declaration -- parameters, then `=>`, then the body. This lets you keep your code a little bit more concise.
@@ -367,7 +367,7 @@ Again, you don't need to specify function types, but if you want to, you can.
 
 ```kcl
 doubleAllDistances = (distances: List Distance -> List Distance) =>
-    List.map ((x: Distance -> Distance) => x * 2) distances
+    List.map((x: Distance -> Distance) => x * 2, distances)
 ```
 
 ### KCL files 
@@ -394,21 +394,25 @@ If your function accepts 0 parameters, then it can be visualized easily. But how
 This is a really powerful way to let consumers customize the goods you've designed before buying or manufacturing them. For example, you might put a design for a cool 3D printed office chair on thingiverse.com which has a function `main(name: Text)`. This function describes a chair with the given name embossed into the back. When a consumer wants to 3D print it, the 3D printing service will let them input their desired name, view the chair with that name embossed, and then order it.
 
 ## Tests
-Functions are marked as tests using the `#[test]` attribute. They're run via the KittyCAD CLI or by the test runner built into the KittyCAD modeling app.
+Functions are marked as tests by putting the `#[test]` attribute above them. They're run via the KittyCAD CLI or by the test runner built into the KittyCAD modeling app.
 
 ```kcl
 #[test]
-division_by_1_doesnt_change_number() =
+division_by_1_doesnt_change_number = () => 
     assert_eq(4/1, 4)
 
+// Because these functions take no arguments, you can use the syntax sugar
+// from the "Constants" section above.
 #[test]
-division_by_10() =
+division_by_10 =
 let
     expected = 10;
     actual = 100/10;
 in assert_eq(expected, actual)
 ```
-The `assert_eq` function will fail the test if the arguments aren't equal. There are similar functions like `assert()` which just checks if its argument is true, or `assert_ne()` which asserts the two are not equal. Tests are run in parallel, because there's no way for two tests to interfere with each other. Test functions cannot take parameters, nor can they return values. If you want to automate tests, consider using smaller functions.
+The `assert_eq` function will fail the test if the arguments aren't equal. There are similar functions like `assert()` which just checks if its argument is true, or `assert_ne()` which asserts the two are not equal. Tests are run in parallel, because there's no way for two tests to interfere with each other.
+
+Test functions cannot take parameters, nor can they return values. So, what if you want to test many different (expected, actual) pairs for your function? Well, you can call `assert_eq` on a list of values. Like this:
 
 ```kcl
 #[test]
@@ -417,9 +421,9 @@ let
     n = 100
     inputs = List.range(0, n) // A list of numbers from `0` to `n`.
     expected = List.replicate(0, n) // A list of length `n`, every element is `0`.
-    actual = List.map ((x) => x * 0) inputs
+    actual = List.map((x) => x * 0, inputs)
 in
-    List.map2 assert_eq actual expected
+    List.map2(assert_eq, actual, expected)
 ```
 Here, the function `List.map2` is a lot like `List.map` except it has _two_ input lists. Its function argument takes an element from each list, instead of just from one list. So, it takes a function of type `(a, b) => c`, a `List a` and a `List b` and passes them into the function, element by element, creating a `List c`.
 
