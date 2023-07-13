@@ -384,7 +384,7 @@ There is an open ecosystem of tooling that understands KCL files, and can visual
 
 1. Open it in a KCL viewer. The primary KCL visualizer is built into KittyCAD's [modeling app](untitled-app). However, other visualizers exist too. These visualizers help you understand your model and show it to teammates, clients, fans, etc. 
 2. Send it to a service like KittyCAD's analysis API. Generally, you send a KCL file, a query type (e.g. "mass" or "cost to print") and your desired unit of measurement (e.g. "kilograms") to that API. Then the API will analyze your KCL, figure out the answer, and convert it to your requested units.
-3. Send it to a 3D printing or prototyping service. They'll accept a KCL file and print out the object returned by your function.
+3. Export it to KittyCAD's GLTF file format, then send that to 3D printing services or manufacturing services. They'll print/manufacture the object your function describes.
 4. Convert it to other, less advanced formats, for your colleagues stuck at legacy companies that use Autodesk. 
 
 In all these cases, you can choose one or more KCL functions to visualize/analyze/print/export. If you don't specify, the KCL ecosystem generally defaults to looking for a function called `main`. This convention is useful! For example, if a client wants you to build a bookshelf, you can send them a KCL file, where the `main` function outputs the bookshelf. When they open the file in a KCL viewer, they'll see the bookshelf. But they can also open up the sidebar, and look at all the other KCL functions your bookshelf is composed of. Then they can visualize those function separately -- e.g. they might want to drill down to view only the shelf, or the backboard.
