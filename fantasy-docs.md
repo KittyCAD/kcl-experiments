@@ -141,11 +141,9 @@ A measurement type (e.g. `Force` or `Distance`) may have a lot of different cons
      c. `Distance.Metre(1)`
      d. `Distance.Yard(0.9144)`
  2. A combination of different units, using a standard mathematical definition, e.g.
-     a. `Force.mdt(Mass::Kilogram(1), Distance::Metre(1), Time::Second(1))` (force = mass * distance * time)
-     b. `Area.rectangle(Distance::Metre(1), Distance::Metre(2))` (area = distance_x * distance_y)
-     c. `Area.rectangle(Distance::Metre(1), Distance::Yard(1.8288))` (same equation as above, but mixing imperial and metric)
-
- 2. As a combination of named units, e.g. `x = Force<Kilogram, Metre, Second>(675.559)`
+     a. `Force.mdt(Mass.Kilogram(1), Distance.Metre(1), Time.Second(1))` (force = mass * distance * time)
+     b. `Area.rectangle(Distance.Metre(1), Distance.Metre(2))` (area = distance_x * distance_y)
+     c. `Area.rectangle(Distance.Metre(1), Distance.Yard(1.8288))` (same equation as above, but mixing imperial and metric)
 
 Both these expressions have the same _type_ (`Force`) but use different _constructors_ to give the specific value. For more about syntax, see the Syntax section below.
 
@@ -231,7 +229,7 @@ Enums can have fields associated with them:
 enum ExtrudeTop = Open | Closed(Material)
 ```
 
-has two possible variants. The first variant is `Open` and this variant only has one possible value: the `Open` itself. The second variant,`Closed`, has a field `Material`, so if you create a value of type `ExtrudeTop::Material` it must also have a `Material`.
+has two possible variants. The first variant is `Open` and this variant only has one possible value: the `Open` itself. The second variant,`Closed`, has a field `Material`, so if you create a value of type `ExtrudeTop.Material` it must also have a `Material`.
 
 The standard library uses enums, and users can create their own. There are no nulls or undefined in KCL, instead, we use the Option enum:
 
@@ -241,8 +239,6 @@ enum Option a = None | Some(a)
 
 This enum has two variants. Either it is `None` or it's `Some`, and if it's `Some` then it also has a value of type `a` (see the "Type variables" section above).
 
-There is also `enum Result t e = Ok(t) | Err(e)`, which is a useful way to express operations that might succeed or fail with an error value. Option and Result work just like they do in other languages (see Java, Swift, Rust, Haskell, Elm).
-
 ## Syntax
 
 ### Functions
@@ -251,21 +247,21 @@ A KCL program is made up of _functions_. A function has a name, parameters, and 
 
 ```kcl
 /// A can for our line of *awesome* new [baked beans](https://example.com/beans).
-can_of_beans(radius: Distance, height: Distance) -> Solid3d =
+can_of_beans = (radius: Distance, height: Distance -> Solid3d) =>
     circle(radius)
     |> extrude_closed(material.aluminium, height)
 ```
 
 Let's break this down line-by-line.
  1. Docstring: a comment which describes the function below it. Your KCL editor probably supports showing this comment when you mouse over the function, or over a visualization of the 3D shape it outputs. Your editor/viewer also probably supports Markdown.
- 2. This is the function signature. It lets readers (and the Puffin compiler) know this is a function called "can_of_beans". The function takes two parameters, called "radius" and "height". Both parameters have type Distance. It returns a Solid3d. The "=" sign marks the end of the function signature and the start of the expression/function body.
- 3. First line of the function body. This calls the function "circle" with the parameter "radius".
+ 2. This is where the function starts. First is the function name, "can_of_beans". The name is followed by an `=`, then the function signature. The signature describes the function's parameters and return types. This function takes two parameters, called "radius" and "height". Both parameters have type Distance. It returns a Solid3d. The `=>` marks the end of the function signature, and the start of the function body.
+ 3. The function body is an _expression_. The first line of the expression is calling the function "circle" with the parameter "radius".
  4. The |> operator composes two functions. If you see `f |> g` it means "calculate `f` then apply its output as input to `g`". So, this line takes the circle from the previous line, and uses it as the last parameter to `extrude_closed`. 
 
 You could write this same function in a different way without the `|>` operator: 
 
 ```kcl
-can_of_beans(radius, height) =
+can_of_beans = (radius: Distance, height: Distance -> Solid3d) =>
     extrude_closed(material.aluminium, height, circle(radius))
 ```
 
@@ -274,7 +270,7 @@ But we generally find the `|>` operator makes your KCL functions easier to read.
 In this example function, we specified the types of both input parameters and the output type. But the KCL compiler is smart! It's smart enough to infer the types of our parameters and return types even if you don't specify them. So you could have written
 
 ```kcl
-can_of_beans(radius, height) =
+can_of_beans = (radius, height) =>
     circle(radius)
     |> extrude_closed(material.aluminium, height)
 ```
@@ -284,22 +280,23 @@ Here, the KCL compiler:
  * Infers `height` must be a `Distance` because the second parameter of `extrude_closed` is a `Distance`. 
  * Infers the function returns a `Solid3d` because it's returning the return value of `extrude_closed`, which is `Solid3d`.
 
-To invoke the function, you'd type
+To invoke the function, you'd do this:
 
 ```kcl
-can_of_beans((10, Centimeter), (1, Foot))
+can_of_beans(Distance.Centimeter(10), Distance.Foot(1))
 ```
+
+(Note that, as discussed above, this example uses KCL measurement types (e.g. distance) instead of general-purpose number types. This lets you seamlessly interoperate between different units of measurement, like feet and centimeters)
 
 This is an expression which evaluates `can_of_beans` with its two input parameters, i.e. radius and height. You can use this anywhere an expression is valid, which currently is just 
 1. As an argument to a function
 2. As the body of a function
 
-Note that, as discussed above, this example uses KCL measurement types (e.g. distance) instead of general-purpose number types. This lets you seamlessly interoperate between different units of measurement, like feet and centimeters.
 
 Some units have aliases, so you could also write
 
 ```kcl
-can_of_beans((10, Cm), (1, Ft))
+can_of_beans(Cm(10), Ft(1))
 ```
 
 See the [docs](units) for all units and aliases.
@@ -308,27 +305,27 @@ Every KCL function body is a single expression. If a function body gets really b
 
 ```kcl
 let
-  can_radius = (10, Cm)
-  can_height = (1, Ft)
+  can_radius = Cm(10)
+  can_height = can_radius * 5
 in can_of_beans(can_radius, can_height)
 ```
 
 The constants you create in `let` are scoped to the let-in expression. The value of the expression is the `in` part. Let-in blocks are a standard piece of notation from functional programming languages (e.g. in [Elm][elm-let-in], [OCaml][ocaml-let-in] and [Haskell][haskell-let-in]) that help make large expressions more readable. We find they make large KCL functions readable too.
 
-### Constants
+#### Constants
 
 KCL doesn't have any mutation or changes, so there aren't any variables. Files contain a number of functions -- that's it. 
 
-Other languages have named constants and variables. KCL doesn't have variables (because the language describes unchanging geometry and physical characteristics of real-world objects). But it _does_ have named constants. Here's two different ways to declare it:
+Other languages have named constants and variables. KCL doesn't have variables (because the language describes unchanging geometry and physical characteristics of real-world objects). But it _does_ have named constants. Here's how you declare them.
 
 ```kcl
-my_can = can_of_beans((10, Cm), (1, Ft))
+my_can = can_of_beans(Cm(10), Ft(1))
 ```
 
 This declares a named constant called `my_can`, which is the result of calling the `can_of_beans` function we defined above. KCL compiler inferred the type, but you can add a type annotation if you want to:
 
 ```kcl
-my_can: Solid3d = can_of_beans((10, Cm), (1, Ft))
+my_can: Solid3d = can_of_beans(Cm(10), Ft(1))
 ```
 
 This named constant is actually just syntactic sugar for a function that takes 0 parameters. After all, functions called with the same inputs always return the same value -- they're fully deterministic. So a function with 0 parameters is just a function that always returns a constant value. Or, to simplify: it _is_ a constant value. 
@@ -336,7 +333,41 @@ This named constant is actually just syntactic sugar for a function that takes 0
 Without the syntactic sugar, `my_can` could be declared like this:
 
 ```kcl
-my_can() -> Solid3d = can_of_beans((10, Cm), (1, Ft))
+my_can = (-> Solid3d) => can_of_beans(Cm(10), Ft(1))
+```
+
+Note the function signature. Function signatures are always (parameters -> return type), but here we have no parameters, so the function signature just omits them.
+
+#### Functions as values
+
+Sometimes, functions are parameters to other functions.
+
+```kcl
+doubleDistance = (d: Distance) =>
+    d * 2
+
+doubleAllDistances = (distances: List Distance -> List Distance) =>
+    List.map(doubleDistance, distances)
+```
+Here, the `doubleAllDistances` function takes a list of distances and returns a list where all distances are doubled. It does this using the standard library function `List.map`. This takes two parameters:
+
+1. A function to call on every element of a list
+2. The list whose elements should be passed into the above function
+
+This is neat. You can do a lot with standard library functions like this. However, there's another way to write this code.
+
+```kcl
+doubleAllDistances = (distances: List Distance -> List Distance) =>
+    List.map((x) => x * 2, distances)
+```
+
+In this version, we've replaced the named function `doubleDistance` with an _anonymous function_ (also known as a _closure_). These closures use the same syntax for function declaration -- parameters, then `=>`, then the body. This lets you keep your code a little bit more concise.
+
+Again, you don't need to specify function types, but if you want to, you can.
+
+```kcl
+doubleAllDistances = (distances: List Distance -> List Distance) =>
+    List.map((x: Distance -> Distance) => x * 2, distances)
 ```
 
 ### KCL files 
@@ -351,9 +382,9 @@ This invites the question: how do I use this function and why did I write it?
 
 There is an open ecosystem of tooling that understands KCL files, and can visualize or analyze the functions contained therein. Here are some examples of what you can do with a KCL function.
 
-1. Open it in a KCL viewer. The primary KCL visualizer is built into KittyCAD's KCL live-editing [web app](untitled-app). However, other visualizers exist too. These visualizers help you understand your model and show it to teammates, clients, fans, etc. 
+1. Open it in a KCL viewer. The primary KCL visualizer is built into KittyCAD's [modeling app](untitled-app). However, other visualizers exist too. These visualizers help you understand your model and show it to teammates, clients, fans, etc. 
 2. Send it to a service like KittyCAD's analysis API. Generally, you send a KCL file, a query type (e.g. "mass" or "cost to print") and your desired unit of measurement (e.g. "kilograms") to that API. Then the API will analyze your KCL, figure out the answer, and convert it to your requested units.
-3. Send it to a 3D printing or prototyping service. They'll accept a KCL file and print out the object returned by your function.
+3. Export it to KittyCAD's GLTF file format, then send that to 3D printing services or manufacturing services. They'll print/manufacture the object your function describes.
 4. Convert it to other, less advanced formats, for your colleagues stuck at legacy companies that use Autodesk. 
 
 In all these cases, you can choose one or more KCL functions to visualize/analyze/print/export. If you don't specify, the KCL ecosystem generally defaults to looking for a function called `main`. This convention is useful! For example, if a client wants you to build a bookshelf, you can send them a KCL file, where the `main` function outputs the bookshelf. When they open the file in a KCL viewer, they'll see the bookshelf. But they can also open up the sidebar, and look at all the other KCL functions your bookshelf is composed of. Then they can visualize those function separately -- e.g. they might want to drill down to view only the shelf, or the backboard.
@@ -362,6 +393,41 @@ If your function accepts 0 parameters, then it can be visualized easily. But how
 
 This is a really powerful way to let consumers customize the goods you've designed before buying or manufacturing them. For example, you might put a design for a cool 3D printed office chair on thingiverse.com which has a function `main(name: Text)`. This function describes a chair with the given name embossed into the back. When a consumer wants to 3D print it, the 3D printing service will let them input their desired name, view the chair with that name embossed, and then order it.
 
+## Tests
+Functions are marked as tests by putting the `#[test]` attribute above them. They're run via the KittyCAD CLI or by the test runner built into the KittyCAD modeling app.
+
+```kcl
+#[test]
+division_by_1_doesnt_change_number = () => 
+    assert_eq(4/1, 4)
+
+// Because these functions take no arguments, you can use the syntax sugar
+// from the "Constants" section above.
+#[test]
+division_by_10 =
+let
+    expected = 10;
+    actual = 100/10;
+in assert_eq(expected, actual)
+```
+The `assert_eq` function will fail the test if the arguments aren't equal. There are similar functions like `assert()` which just checks if its argument is true, or `assert_ne()` which asserts the two are not equal. Tests are run in parallel, because there's no way for two tests to interfere with each other.
+
+Test functions cannot take parameters, nor can they return values. So, what if you want to test many different (expected, actual) pairs for your function? Well, you can call `assert_eq` on a list of values. Like this:
+
+```kcl
+#[test]
+multiplication_by_zero() =
+let
+    n = 100
+    inputs = List.range(0, n) // A list of numbers from `0` to `n`.
+    expected = List.replicate(0, n) // A list of length `n`, every element is `0`.
+    actual = List.map((x) => x * 0, inputs)
+in
+    List.map2(assert_eq, actual, expected)
+```
+Here, the function `List.map2` is a lot like `List.map` except it has _two_ input lists. Its function argument takes an element from each list, instead of just from one list. So, it takes a function of type `(a, b) => c`, a `List a` and a `List b` and passes them into the function, element by element, creating a `List c`.
+
+So, used here, it takes the input lists `actual` and `expected`, then passes an element from each into `assert_eq`.
 
 [units]: https://kittycad.io/docs/units
 [untitled-app]: https://kittycad.io/untitled-app
