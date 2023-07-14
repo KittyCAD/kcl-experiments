@@ -1,4 +1,4 @@
-# Meta
+# Intro
 
 These are imaginative, ambitious docs designed to explore designs for a good CAD language. None of this is final, everything is experimental. We're making this public to stimulate your imagination and help workshop our ideas.
 
