@@ -386,7 +386,7 @@ You pass keyword arguments like this:
 
 ```kcl
 /// Using a keyword argument.
-sphere(Distance;:metre(1), material = Plastic.ISO1234)
+sphere(Distance::metre(1), material = Plastic.ISO1234)
 
 /// Or, don't use a keyword argument and rely on the default.
 sphere(Distance::metre(1))
