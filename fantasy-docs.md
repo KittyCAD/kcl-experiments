@@ -78,7 +78,7 @@ Two or more Solid2ds can be:
 
 _Solid3ds_ can be simple shapes like spheres and cubes, or a combination of them (a sphere on top of a cube).
 
-Previously every type we've examined has had geometric properties, like length or height. But Solid3d is different, because it also has a _material_. Materials (for example, aluminium or plastic) let KCL analyze your model and report back important data like its weight or tensile strength. We'll discuss materials more below.
+Every type we've previously examined had geometric properties, like length or height. But Solid3d is different, because it also has a _material_. Materials (for example, aluminium or plastic) let KittyCAD analyze your model and report important data like its weight or tensile strength. We'll discuss materials more below.
 
 Create a Solid3d by:
  - Extruding a 2D shape into the third dimension (along a straight line, or any path)
@@ -249,7 +249,7 @@ A KCL program is made up of _functions_. A function has a name, parameters, and 
 /// A can for our line of *awesome* new [baked beans](https://example.com/beans).
 can_of_beans = (radius: Distance, height: Distance -> Solid3d) =>
     circle(radius)
-    |> extrude_closed(material.aluminium, height)
+    |> extrude_closed(height)
 ```
 
 Let's break this down line-by-line.
@@ -262,7 +262,7 @@ You could write this same function in a different way without the `|>` operator:
 
 ```kcl
 can_of_beans = (radius: Distance, height: Distance -> Solid3d) =>
-    extrude_closed(material.aluminium, height, circle(radius))
+    extrude_closed(height, circle(radius))
 ```
 
 But we generally find the `|>` operator makes your KCL functions easier to read.
@@ -272,7 +272,7 @@ In this example function, we specified the types of both input parameters and th
 ```kcl
 can_of_beans = (radius, height) =>
     circle(radius)
-    |> extrude_closed(material.aluminium, height)
+    |> extrude_closed(height)
 ```
 
 Here, the KCL compiler:
@@ -369,6 +369,30 @@ Again, you don't need to specify function types, but if you want to, you can.
 doubleAllDistances = (distances: List Distance -> List Distance) =>
     List.map((x: Distance -> Distance) => x * 2, distances)
 ```
+
+#### Keyword arguments
+
+All the functions you saw previously had a list of required arguments. Users will look at the function definition, read every parameter from first to last, and pass in the right values as arguments.
+
+These are called _positional_ or _required_ arguments. But KCL also supports _keyword_ arguments. Like this:
+
+```kcl
+sphere = (radius: Distance, material: Material = Aluminium.ISO5052) => ...
+```
+
+Here, the `material` parameter is a _keyword parameter_. It's optional, so if the caller doesn't provide it, it takes a default value, in this case the `Aluminium.ISO5052` alloy from the KCL standard library.
+
+You pass keyword arguments like this:
+
+```kcl
+/// Using a keyword argument.
+sphere(Distance::metre(1), material = Plastic.ISO1234)
+
+/// Or, don't use a keyword argument and rely on the default.
+sphere(Distance::metre(1))
+```
+
+Keyword arguments help keep your KCL programs readable, and allows us to add new features to the standard library in a backwards-compatible way. Suppose that KittyCAD releases KCL 1.4, which adds a new positional argument to a standard library function `sphere`. Any programs using the definition of `sphere` from KCL 1.3 would stop compiling when you upgrade to 1.4 (because they're missing a parameter to `sphere`). But if we add the new parameter as a _keyword parameter_, your existing programs will keep working -- they'll just use the default value for that parameter.
 
 ### KCL files 
 
