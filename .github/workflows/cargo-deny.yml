@@ -1,0 +1,32 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'compiler/**.rs'
+      - compiler/.github/workflows/cargo-deny.yml
+      - compiler/Cargo.lock
+      - compiler/Cargo.toml
+      - compiler/rust-toolchain.toml
+  pull_request:
+    paths:
+      - 'compiler/**.rs'
+      - compiler/.github/workflows/cargo-deny.yml
+      - compiler/Cargo.lock
+      - compiler/Cargo.toml
+      - compiler/rust-toolchain.toml
+  workflow_dispatch:
+permissions: read-all
+name: cargo deny
+jobs:
+  compiler-cargodeny:
+    name: cargo deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: EmbarkStudios/cargo-deny-action@v1
+        with:
+          log-level: warn
+          command: check bans licenses sources
+          arguments: --all-features

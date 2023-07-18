@@ -1,15 +1,15 @@
-[workspace]
+[package]
+name = "compiler"
+version = "0.1.0"
+edition = "2021"
+authors.workspace = true
+description.workspace = true
+documentation.workspace = true
+publish.workspace = true
+repository.workspace = true
+license.workspace = true
 
-members = [
-    "cli",
-    "compiler",
-]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[workspace.package]
-authors = ["Adam Chalmers <adam.chalmers@kittycad.io>"]
-description = "Tooling for KCL (KittyCAD Language)"
-documentation = "docs.rs/kittycad-lang"
-readme = "README.md"
-publish = false
-repository = "https://github.com/KittyCAD/kcl"
-license = "MIT"
+[dependencies]
+nom = "7.1.3"

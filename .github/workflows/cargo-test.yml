@@ -3,23 +3,23 @@ on:
     branches:
       - main
     paths:
-      - '**.rs'
-      - .github/workflows/cargo-test.yml
-      - Cargo.lock
-      - Cargo.toml
-      - rust-toolchain.toml
+      - 'compiler/**.rs'
+      - compiler/.github/workflows/cargo-test.yml
+      - compiler/Cargo.lock
+      - compiler/Cargo.toml
+      - compiler/rust-toolchain.toml
   pull_request:
     paths:
-      - '**.rs'
-      - .github/workflows/cargo-test.yml
-      - Cargo.lock
-      - Cargo.toml
-      - rust-toolchain.toml
+      - 'compiler/**.rs'
+      - compiler/.github/workflows/cargo-test.yml
+      - compiler/Cargo.lock
+      - compiler/Cargo.toml
+      - compiler/rust-toolchain.toml
   workflow_dispatch:
 permissions: read-all
 name: cargo test
 jobs:
-  cargotest:
+  compiler-cargotest:
     name: cargo test
     runs-on: ubuntu-latest
     steps:
