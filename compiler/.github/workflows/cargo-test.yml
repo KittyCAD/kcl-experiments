@@ -31,7 +31,6 @@ jobs:
             toolchain: stable
             override: true
 
-      - uses: taiki-e/install-action@cargo-llvm-cov
       - uses: taiki-e/install-action@nextest
 
       - name: Rust Cache
@@ -40,15 +39,6 @@ jobs:
       - name: cargo test
         shell: bash
         run: |
-          cargo llvm-cov nextest --all-features --lcov --output-path lcov.info
+          cargo nextest run --all-features
         env:
           RUST_BACKTRACE: 1
-
-      - name: Upload to codecov.io
-        uses: codecov/codecov-action@v3
-        with:
-          token: ${{secrets.CODECOV_TOKEN}}
-          fail_ci_if_error: true
-          flags: unittests
-          verbose: true
-          files: lcov.info
