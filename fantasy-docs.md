@@ -429,10 +429,10 @@ division_by_1_doesnt_change_number = () =>
 // from the "Constants" section above.
 #[test]
 division_by_10 =
-let
-    expected = 10;
-    actual = 100/10;
-in assert_eq(expected, actual)
+    let
+        expected = 10;
+        actual = 100/10;
+    in assert_eq(expected, actual)
 ```
 The `assert_eq` function will fail the test if the arguments aren't equal. There are similar functions like `assert()` which just checks if its argument is true, or `assert_ne()` which asserts the two are not equal. Tests are run in parallel, because there's no way for two tests to interfere with each other.
 
@@ -440,14 +440,14 @@ Test functions cannot take parameters, nor can they return values. So, what if y
 
 ```kcl
 #[test]
-multiplication_by_zero() =
-let
-    n = 100
-    inputs = List.range(0, n) // A list of numbers from `0` to `n`.
-    expected = List.replicate(0, n) // A list of length `n`, every element is `0`.
-    actual = List.map((x) => x * 0, inputs)
-in
-    List.map2(assert_eq, actual, expected)
+multiplication_by_zero = () =>
+    let
+        n = 100
+        inputs = List.range(0, n) // A list of numbers from `0` to `n`.
+        expected = List.replicate(0, n) // A list of length `n`, every element is `0`.
+        actual = List.map((x) => x * 0, inputs)
+    in
+        List.map2(assert_eq, actual, expected)
 ```
 Here, the function `List.map2` is a lot like `List.map` except it has _two_ input lists. Its function argument takes an element from each list, instead of just from one list. So, it takes a function of type `(a, b) => c`, a `List a` and a `List b` and passes them into the function, element by element, creating a `List c`.
 
