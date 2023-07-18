@@ -12,3 +12,4 @@ documentation = "docs.rs/kittycad-lang"
 readme = "README.md"
 publish = false
 repository = "https://github.com/KittyCAD/kcl"
+license = "MIT"
