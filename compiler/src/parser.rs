@@ -44,7 +44,7 @@ struct Assignment {
 impl Assignment {
     fn parse(i: Input) -> Result<Self> {
         let parts = tuple((
-            character::alpha1,
+            nom_unicode::complete::alphanumeric1,
             nom::bytes::complete::tag(" = "),
             Expression::parse,
         ));
@@ -72,10 +72,10 @@ mod tests {
     #[test]
     fn test_assignment() {
         let expected = Assignment {
-            identifier: "n".to_string(),
+            identifier: "n張".to_string(),
             value: Expression::Number(100),
         };
-        let i = "n = 100";
+        let i = "n張 = 100";
         let (i, actual) = Assignment::parse(i).unwrap();
         assert!(i.is_empty());
         assert_eq!(actual, expected);
