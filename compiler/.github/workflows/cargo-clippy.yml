@@ -1,0 +1,44 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.rs'
+      - .github/workflows/cargo-clippy.yml
+      - Cargo.lock
+      - Cargo.toml
+      - rust-toolchain
+      - rust-toolchain.toml
+  pull_request:
+    paths:
+      - '**.rs'
+      - .github/workflows/cargo-clippy.yml
+      - Cargo.lock
+      - Cargo.toml
+      - rust-toolchain
+      - rust-toolchain.toml
+name: cargo clippy
+jobs:
+  cargoclippy:
+    name: cargo clippy --tests --benches --examples
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: recursive
+          token: ${{secrets.GLOBAL_PAT}}
+
+      - name: Install latest rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            override: true
+            components: clippy
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.5.1
+
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: "--benches --tests --examples --all-features -- -D warnings"

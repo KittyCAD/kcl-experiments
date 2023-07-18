@@ -1,0 +1,13 @@
+[workspace]
+
+members = [
+    "cli",
+    "compiler",
+]
+
+[workspace.package]
+authors = ["Adam Chalmers <adam.chalmers@kittycad.io>"]
+description = "Tooling for KCL (KittyCAD Language)"
+documentation = "docs.rs/kittycad-lang"
+readme = "README.md"
+publish = false

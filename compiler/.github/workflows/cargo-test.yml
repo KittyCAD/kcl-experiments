@@ -1,0 +1,54 @@
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '**.rs'
+      - .github/workflows/cargo-test.yml
+      - Cargo.lock
+      - Cargo.toml
+      - rust-toolchain.toml
+  pull_request:
+    paths:
+      - '**.rs'
+      - .github/workflows/cargo-test.yml
+      - Cargo.lock
+      - Cargo.toml
+      - rust-toolchain.toml
+  workflow_dispatch:
+permissions: read-all
+name: cargo test
+jobs:
+  cargotest:
+    name: cargo test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install latest rust
+        uses: actions-rs/toolchain@v1
+        with:
+            toolchain: stable
+            override: true
+
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - uses: taiki-e/install-action@nextest
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2.5.1
+
+      - name: cargo test
+        shell: bash
+        run: |
+          cargo llvm-cov nextest --all-features --lcov --output-path lcov.info
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{secrets.CODECOV_TOKEN}}
+          fail_ci_if_error: true
+          flags: unittests
+          verbose: true
+          files: lcov.info
