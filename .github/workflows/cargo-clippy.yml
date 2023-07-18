@@ -1,25 +1,28 @@
+defaults:
+  run:
+   working-directory: ./compiler
 on:
   push:
     branches:
       - main
     paths:
-      - '**.rs'
-      - .github/workflows/cargo-clippy.yml
-      - Cargo.lock
-      - Cargo.toml
-      - rust-toolchain
-      - rust-toolchain.toml
+      - 'compiler/**.rs'
+      - compiler/.github/workflows/cargo-clippy.yml
+      - compiler/Cargo.lock
+      - compiler/Cargo.toml
+      - compiler/rust-toolchain
+      - compiler/rust-toolchain.toml
   pull_request:
     paths:
-      - '**.rs'
-      - .github/workflows/cargo-clippy.yml
-      - Cargo.lock
-      - Cargo.toml
-      - rust-toolchain
-      - rust-toolchain.toml
+      - 'compiler/**.rs'
+      - compiler/.github/workflows/cargo-clippy.yml
+      - compiler/Cargo.lock
+      - compiler/Cargo.toml
+      - compiler/rust-toolchain
+      - compiler/rust-toolchain.toml
 name: cargo clippy
 jobs:
-  cargoclippy:
+  compiler-cargoclippy:
     name: cargo clippy --tests --benches --examples
     runs-on: ubuntu-latest
     steps:
