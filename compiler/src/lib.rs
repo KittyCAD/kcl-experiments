@@ -1,3 +1,5 @@
+mod ast;
 mod parser;
 
-pub use parser::Program;
+pub use ast::AbstractSyntaxTree;
+pub use parser::Parser;
