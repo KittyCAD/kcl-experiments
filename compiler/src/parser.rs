@@ -9,7 +9,7 @@ use nom::{
     character::complete::{self as character, char as one_char},
     combinator::{map, map_res},
     multi::{many1, separated_list0},
-    sequence::{separated_pair, terminated, tuple},
+    sequence::{preceded, separated_pair, terminated, tuple},
 };
 
 pub type Input<'a> = &'a str;
@@ -116,7 +116,10 @@ impl Expression {
                     Assignment::parse,
                     character::newline,
                 ))),
-                terminated(tag("in"), character::multispace0),
+                terminated(
+                    preceded(character::multispace0, tag("in")),
+                    character::multispace0,
+                ),
                 Expression::parse,
             )),
             |(_, _, assignments, _, expr)| Self::LetIn {
@@ -208,27 +211,57 @@ mod tests {
 
     #[test]
     fn valid_function_definition() {
-        assert_parse(vec![(
-            FnDef {
-                fn_name: "bigCircle".into(),
-                params: vec![
-                    Parameter {
-                        name: "radius".into(),
-                        kcl_type: "Distance".into(),
-                    },
-                    Parameter {
+        assert_parse(vec![
+            (
+                FnDef {
+                    fn_name: "bigCircle".into(),
+                    params: vec![
+                        Parameter {
+                            name: "radius".into(),
+                            kcl_type: "Distance".into(),
+                        },
+                        Parameter {
+                            name: "center".into(),
+                            kcl_type: "Point2D".into(),
+                        },
+                    ],
+                    body: Expression::FnInvocation(FnInvocation {
+                        fn_name: "circle".into(),
+                        args: vec![Expression::Name("radius".into())],
+                    }),
+                    return_type: "Solid2D".into(),
+                },
+                r#"bigCircle = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)"#,
+            ),
+            (
+                FnDef {
+                    fn_name: "bigCircle".into(),
+                    params: vec![Parameter {
                         name: "center".into(),
                         kcl_type: "Point2D".into(),
+                    }],
+                    body: Expression::LetIn {
+                        r#let: vec![Assignment {
+                            identifier: "radius".into(),
+                            value: Expression::Number(14),
+                        }],
+                        r#in: Box::new(Expression::FnInvocation(FnInvocation {
+                            fn_name: "circle".into(),
+                            args: vec![
+                                Expression::Name("radius".into()),
+                                Expression::Name("center".into()),
+                            ],
+                        })),
                     },
-                ],
-                body: Expression::FnInvocation(FnInvocation {
-                    fn_name: "circle".into(),
-                    args: vec![Expression::Name("radius".into())],
-                }),
-                return_type: "Solid2D".into(),
-            },
-            r#"bigCircle = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)"#,
-        )])
+                    return_type: "Solid2D".into(),
+                },
+                "\
+bigCircle = (center: Point2D -> Solid2D) =>
+    let
+        radius = 14
+    in circle(radius, center)",
+            ),
+        ])
     }
 
     #[test]
