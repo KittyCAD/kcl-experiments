@@ -9,13 +9,49 @@ use nom::{
     multi::separated_list0,
     sequence::tuple,
 };
+use std::fmt;
 
 pub type Input<'a> = &'a str;
 pub type Result<'a, T> = nom::IResult<Input<'a>, T>;
 
 /// A KCL identifier can have a value bound to it.
-/// Basically, it's the LHS of an =, e.g. in `x = 1` the identifier is `x`.
-type Identifier = String;
+/// Basically, it's anything that can be used as the name of a constant, function or type.
+/// E.g. in `x = 1` the identifier is `x`.
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct Identifier(String);
+
+impl fmt::Display for Identifier {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+// In tests, you can turn a Rust string into an identifier.
+// In prod, use the parser, because this does not guarantee that the string is a valid identifier.
+#[cfg(test)]
+impl From<&str> for Identifier {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl Parser for Identifier {
+    fn parse(i: Input) -> Result<Self> {
+        // Identifiers cannot start with a number
+        let (i, start) = nom_unicode::complete::alpha1(i)?;
+        // But after the first char, they can include numbers.
+        let (i, end) = nom_unicode::complete::alphanumeric0(i)?;
+        // TODO: This shouldn't need to allocate a string, I should be able to return &str here, but
+        // the compiler doesn't know that `start` and `end` are contiguous slices. I know there's a
+        // way to achieve this, but I don't know what it is yet. Nor is it important enough to worry
+        // about yet.
+        let mut identifier = String::with_capacity(start.len() + end.len());
+        identifier.push_str(start);
+        identifier.push_str(&end);
+        Ok((i, Self(identifier)))
+    }
+}
 
 /// For now, a KCL program is just a series of function definitions.
 /// TODO: It should support also:
@@ -45,7 +81,7 @@ impl Parser for FnDef {
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Parameter {
     pub name: Identifier,
-    pub kcl_type: String,
+    pub kcl_type: Identifier,
 }
 
 /// Function invocation
@@ -59,13 +95,13 @@ pub struct FnInvocation {
 impl Parser for FnInvocation {
     fn parse(i: Input) -> Result<Self> {
         let parts = tuple((
-            parse_identifier,
+            Identifier::parse,
             one_char('('),
             separated_list0(tag(", "), Expression::parse),
             one_char(')'),
         ));
         map(parts, |(fn_name, _, args, _)| FnInvocation {
-            fn_name: fn_name.to_string(),
+            fn_name,
             args,
         })(i)
     }
@@ -104,6 +140,7 @@ impl Parser for Expression {
         ))(i)
     }
 }
+
 impl Expression {
     fn parse_fn_invocation(i: Input) -> Result<Self> {
         map(FnInvocation::parse, Self::FnInvocation)(i)
@@ -139,32 +176,14 @@ pub struct Assignment {
     pub value: Expression,
 }
 
-fn parse_identifier(i: Input) -> Result<String> {
-    // Identifiers cannot start with a number
-    let (i, start) = nom_unicode::complete::alpha1(i)?;
-    // But after the first char, they can include numbers.
-    let (i, end) = nom_unicode::complete::alphanumeric0(i)?;
-    // TODO: This shouldn't need to allocate a string, I should be able to return &str here, but
-    // the compiler doesn't know that `start` and `end` are contiguous slices. I know there's a
-    // way to achieve this, but I don't know what it is yet. Nor is it important enough to worry
-    // about yet.
-    let mut identifier = String::with_capacity(start.len() + end.len());
-    identifier.push_str(start);
-    identifier.push_str(&end);
-    Ok((i, identifier))
-}
-
 impl Parser for Assignment {
     fn parse(i: Input) -> Result<Self> {
         let parts = tuple((
-            parse_identifier,
+            Identifier::parse,
             nom::bytes::complete::tag(" = "),
             Expression::parse,
         ));
-        let mut p = map(parts, |(identifier, _, value)| Self {
-            identifier: identifier.to_string(),
-            value,
-        });
+        let mut p = map(parts, |(identifier, _, value)| Self { identifier, value });
         p(i)
     }
 }
@@ -213,7 +232,7 @@ mod tests {
     fn valid_function_invocations() {
         assert_parse(vec![(
             Expression::FnInvocation(FnInvocation {
-                fn_name: "sphere".to_owned(),
+                fn_name: "sphere".into(),
                 args: vec![Expression::Number(1), Expression::Number(2)],
             }),
             "sphere(1, 2)",
@@ -224,14 +243,14 @@ mod tests {
     fn valid_function_definition() {
         assert_parse(vec![(
             FnDef {
-                fn_name: "bigCircle".to_owned(),
+                fn_name: "bigCircle".into(),
                 params: vec![Parameter {
-                    name: "radius".to_owned(),
-                    kcl_type: "Distance".to_owned(),
+                    name: "radius".into(),
+                    kcl_type: "Distance".into(),
                 }],
                 body: Expression::FnInvocation(FnInvocation {
-                    fn_name: "circle".to_owned(),
-                    args: vec![Expression::Binding("radius".to_owned())],
+                    fn_name: "circle".into(),
+                    args: vec![Expression::Binding("radius".into())],
                 }),
             },
             r#"bigCircle = (radius: Distance) => circle(radius)"#,
@@ -246,7 +265,7 @@ mod tests {
             .map(|lhs| {
                 (
                     Assignment {
-                        identifier: lhs.to_string(),
+                        identifier: lhs.into(),
                         value: Expression::Number(100),
                     },
                     format!("{lhs} = 100"),
