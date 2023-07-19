@@ -9,7 +9,7 @@ use nom::{
     character::complete::{self as character, char as one_char},
     combinator::{map, map_res},
     multi::{many1, separated_list0},
-    sequence::{terminated, tuple},
+    sequence::{separated_pair, terminated, tuple},
 };
 
 pub type Input<'a> = &'a str;
@@ -39,7 +39,39 @@ impl Parser for Identifier {
 
 impl Parser for FnDef {
     fn parse(i: Input) -> Result<Self> {
-        todo!()
+        // Looks like myCircle = (radius: Distance -> Solid2D) => circle(radius)
+        let parts = tuple((
+            Identifier::parse,
+            tag(" = "),
+            tuple((
+                one_char('('),
+                separated_list0(tag(", "), Parameter::parse),
+                tag(" -> "),
+                Identifier::parse,
+                one_char(')'),
+            )),
+            terminated(tag(" =>"), character::multispace0),
+            Expression::parse,
+        ));
+        map(
+            parts,
+            |(fn_name, _, (_paren_start, params, _, return_type, _paren_end), _, body)| Self {
+                fn_name,
+                params,
+                return_type,
+                body,
+            },
+        )(i)
+    }
+}
+
+impl Parser for Parameter {
+    fn parse(i: Input) -> Result<Self> {
+        // Looks like `radius: Distance`
+        map(
+            separated_pair(Identifier::parse, tag(": "), Identifier::parse),
+            |(name, kcl_type)| Self { name, kcl_type },
+        )(i)
     }
 }
 
@@ -128,7 +160,7 @@ mod tests {
     use super::*;
 
     /// Assert that the given input successfully parses into the expected value.
-    fn assert_parse<'a, T, I>(tests: Vec<(T, I)>)
+    fn assert_parse<T, I>(tests: Vec<(T, I)>)
     where
         T: Parser + std::fmt::Debug + PartialEq,
         I: Into<String>,
@@ -148,7 +180,7 @@ mod tests {
     }
 
     /// Assert that the given input fails to parse.
-    fn assert_not_parse<'a, T>(i: Input)
+    fn assert_not_parse<T>(i: Input)
     where
         T: Parser + std::fmt::Debug + PartialEq,
     {
@@ -179,16 +211,23 @@ mod tests {
         assert_parse(vec![(
             FnDef {
                 fn_name: "bigCircle".into(),
-                params: vec![Parameter {
-                    name: "radius".into(),
-                    kcl_type: "Distance".into(),
-                }],
+                params: vec![
+                    Parameter {
+                        name: "radius".into(),
+                        kcl_type: "Distance".into(),
+                    },
+                    Parameter {
+                        name: "center".into(),
+                        kcl_type: "Point2D".into(),
+                    },
+                ],
                 body: Expression::FnInvocation(FnInvocation {
                     fn_name: "circle".into(),
                     args: vec![Expression::Name("radius".into())],
                 }),
+                return_type: "Solid2D".into(),
             },
-            r#"bigCircle = (radius: Distance) => circle(radius)"#,
+            r#"bigCircle = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)"#,
         )])
     }
 

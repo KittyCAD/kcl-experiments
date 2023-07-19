@@ -1,4 +1,4 @@
-///! Abstract syntax tree that KCL files get parsed into.
+//! Abstract syntax tree that KCL files get parsed into.
 use std::fmt;
 
 /// For now, a KCL program is just a series of function definitions.
@@ -35,6 +35,7 @@ impl From<&str> for Identifier {
 pub struct FnDef {
     pub fn_name: Identifier,
     pub params: Vec<Parameter>,
+    pub return_type: Identifier,
     pub body: Expression,
 }
 
