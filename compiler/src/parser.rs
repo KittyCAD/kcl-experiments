@@ -16,7 +16,7 @@ pub type Result<'a, T> = nom::IResult<Input<'a>, T>;
 
 /// A KCL identifier can have a value bound to it.
 /// Basically, it's anything that can be used as the name of a constant, function or type.
-/// E.g. in `x = 1` the identifier is `x`.
+/// E.g. in `x = 1` the identifier is the name `x`.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
 pub struct Identifier(String);
@@ -48,7 +48,7 @@ impl Parser for Identifier {
         // about yet.
         let mut identifier = String::with_capacity(start.len() + end.len());
         identifier.push_str(start);
-        identifier.push_str(&end);
+        identifier.push_str(end);
         Ok((i, Self(identifier)))
     }
 }
@@ -116,9 +116,9 @@ pub enum Expression {
     Number(u64),
     /// Function invocations evaluate to their return value.
     FnInvocation(FnInvocation),
-    /// A value bound to an identifier is an expression.
+    /// A value bound to a name is an expression.
     /// It evaluates to the bound value.
-    Binding(Identifier),
+    Name(Identifier),
     /// Let-in expressions evaluate to the `in` part.
     LetIn {
         r#let: Vec<Assignment>,
@@ -250,7 +250,7 @@ mod tests {
                 }],
                 body: Expression::FnInvocation(FnInvocation {
                     fn_name: "circle".into(),
-                    args: vec![Expression::Binding("radius".into())],
+                    args: vec![Expression::Name("radius".into())],
                 }),
             },
             r#"bigCircle = (radius: Distance) => circle(radius)"#,
@@ -262,14 +262,26 @@ mod tests {
         let valid_lhs = ["亞當", "n", "n123"];
         let tests = valid_lhs
             .into_iter()
-            .map(|lhs| {
-                (
-                    Assignment {
-                        identifier: lhs.into(),
-                        value: Expression::Number(100),
-                    },
-                    format!("{lhs} = 100"),
-                )
+            .flat_map(|lhs| {
+                vec![
+                    (
+                        Assignment {
+                            identifier: lhs.into(),
+                            value: Expression::FnInvocation(FnInvocation {
+                                fn_name: "foo".into(),
+                                args: vec![Expression::Number(100)],
+                            }),
+                        },
+                        format!("{lhs} = foo(100)"),
+                    ),
+                    (
+                        Assignment {
+                            identifier: lhs.into(),
+                            value: Expression::Number(100),
+                        },
+                        format!("{lhs} = 100"),
+                    ),
+                ]
             })
             .collect();
         assert_parse(tests)
