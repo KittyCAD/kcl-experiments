@@ -13,21 +13,81 @@ use nom::{
 pub type Input<'a> = &'a str;
 pub type Result<'a, T> = nom::IResult<Input<'a>, T>;
 
+/// A KCL identifier can have a value bound to it.
+/// Basically, it's the LHS of an =, e.g. in `x = 1` the identifier is `x`.
+type Identifier = String;
+
+/// For now, a KCL program is just a series of function definitions.
+/// TODO: It should support also:
+///  - Comments
+///  - Import statements
+pub type Program = Vec<FnDef>;
+
+/// Function definition
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct FnDef {
+    pub fn_name: Identifier,
+    pub params: Vec<Parameter>,
+    pub body: Expression,
+}
+
+impl Parser for FnDef {
+    fn parse(i: Input) -> Result<Self> {
+        todo!()
+    }
+}
+
+/// Parameters for declared functions
+
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub struct Parameter {
+    pub name: Identifier,
+    pub kcl_type: String,
+}
+
 /// Function invocation
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-struct FnInvocation {
-    fn_name: String,
-    args: Vec<Expression>,
+pub struct FnInvocation {
+    pub fn_name: Identifier,
+    pub args: Vec<Expression>,
+}
+
+impl Parser for FnInvocation {
+    fn parse(i: Input) -> Result<Self> {
+        let parts = tuple((
+            parse_identifier,
+            one_char('('),
+            separated_list0(tag(", "), Expression::parse),
+            one_char(')'),
+        ));
+        map(parts, |(fn_name, _, args, _)| FnInvocation {
+            fn_name: fn_name.to_string(),
+            args,
+        })(i)
+    }
 }
 
 /// Expressions can be evaluated (producing a value)
 /// or bound to identifiers by assignments.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-enum Expression {
+pub enum Expression {
+    /// Numbers are expressions
     Number(u64),
+    /// Function invocations evaluate to their return value.
     FnInvocation(FnInvocation),
+    /// A value bound to an identifier is an expression.
+    /// It evaluates to the bound value.
+    Binding(Identifier),
+    /// Let-in expressions evaluate to the `in` part.
+    LetIn {
+        r#let: Vec<Assignment>,
+        r#in: Box<Expression>,
+    },
 }
 
 trait Parser: Sized {
@@ -36,23 +96,25 @@ trait Parser: Sized {
 
 impl Parser for Expression {
     fn parse(i: Input) -> Result<Self> {
-        alt((Self::parse_num, Self::parse_fn_invocation))(i)
+        alt((
+            Self::parse_num,
+            Self::parse_fn_invocation,
+            Self::parse_binding,
+            Self::parse_let_in,
+        ))(i)
     }
 }
 impl Expression {
     fn parse_fn_invocation(i: Input) -> Result<Self> {
-        let parts = tuple((
-            parse_identifier,
-            one_char('('),
-            separated_list0(tag(", "), Expression::parse),
-            one_char(')'),
-        ));
-        map(parts, |(fn_name, _, args, _)| {
-            Self::FnInvocation(FnInvocation {
-                fn_name: fn_name.to_string(),
-                args,
-            })
-        })(i)
+        map(FnInvocation::parse, Self::FnInvocation)(i)
+    }
+
+    fn parse_binding(i: Input) -> Result<Self> {
+        todo!()
+    }
+
+    fn parse_let_in(i: Input) -> Result<Self> {
+        todo!()
     }
 
     fn parse_num(i: Input) -> Result<Self> {
@@ -72,9 +134,9 @@ impl Expression {
 /// Assigning a value to a binding, e.g. `n = 100`.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]
-struct Assignment {
-    identifier: String,
-    value: Expression,
+pub struct Assignment {
+    pub identifier: Identifier,
+    pub value: Expression,
 }
 
 fn parse_identifier(i: Input) -> Result<String> {
@@ -155,6 +217,24 @@ mod tests {
                 args: vec![Expression::Number(1), Expression::Number(2)],
             }),
             "sphere(1, 2)",
+        )])
+    }
+
+    #[test]
+    fn valid_function_definition() {
+        assert_parse(vec![(
+            FnDef {
+                fn_name: "bigCircle".to_owned(),
+                params: vec![Parameter {
+                    name: "radius".to_owned(),
+                    kcl_type: "Distance".to_owned(),
+                }],
+                body: Expression::FnInvocation(FnInvocation {
+                    fn_name: "circle".to_owned(),
+                    args: vec![Expression::Binding("radius".to_owned())],
+                }),
+            },
+            r#"bigCircle = (radius: Distance) => circle(radius)"#,
         )])
     }
 
