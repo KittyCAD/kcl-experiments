@@ -71,6 +71,7 @@ pub enum Expression {
         r#let: Vec<Assignment>,
         r#in: Box<Expression>,
     },
+    // TODO: Add a case for basic math, e.g. x + 1 or 3/4
 }
 
 /// Assigning a value to a binding, e.g. `n = 100`.

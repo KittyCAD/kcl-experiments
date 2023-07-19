@@ -8,8 +8,8 @@ use nom::{
     bytes::complete::tag,
     character::complete::{self as character, char as one_char},
     combinator::{map, map_res},
-    multi::separated_list0,
-    sequence::tuple,
+    multi::{many1, separated_list0},
+    sequence::{terminated, tuple},
 };
 
 pub type Input<'a> = &'a str;
@@ -61,10 +61,10 @@ impl Parser for FnInvocation {
 impl Parser for Expression {
     fn parse(i: Input) -> Result<Self> {
         alt((
+            Self::parse_let_in,
             Self::parse_num,
             Self::parse_fn_invocation,
-            Self::parse_binding,
-            Self::parse_let_in,
+            map(Identifier::parse, Self::Name),
         ))(i)
     }
 }
@@ -74,12 +74,27 @@ impl Expression {
         map(FnInvocation::parse, Self::FnInvocation)(i)
     }
 
-    fn parse_binding(i: Input) -> Result<Self> {
-        todo!()
-    }
-
     fn parse_let_in(i: Input) -> Result<Self> {
-        todo!()
+        map(
+            tuple((
+                tag("let"),
+                character::newline,
+                many1(tuple((
+                    character::multispace0,
+                    Assignment::parse,
+                    character::newline,
+                ))),
+                terminated(tag("in"), character::multispace0),
+                Expression::parse,
+            )),
+            |(_, _, assignments, _, expr)| Self::LetIn {
+                r#let: assignments
+                    .into_iter()
+                    .map(|(_, assign, _)| assign)
+                    .collect(),
+                r#in: Box::new(expr),
+            },
+        )(i)
     }
 
     fn parse_num(i: Input) -> Result<Self> {
@@ -127,7 +142,7 @@ mod tests {
             );
             assert_eq!(
                 actual, expected,
-                "failed test {test_id}: expected {expected:?} and got {actual:?}"
+                "failed test {test_id}: expected {expected:#?} and got {actual:#?}"
             );
         }
     }
@@ -174,6 +189,29 @@ mod tests {
                 }),
             },
             r#"bigCircle = (radius: Distance) => circle(radius)"#,
+        )])
+    }
+
+    #[test]
+    fn let_in() {
+        assert_parse(vec![(
+            Expression::LetIn {
+                r#let: vec![
+                    Assignment {
+                        identifier: "x".into(),
+                        value: Expression::Number(1),
+                    },
+                    Assignment {
+                        identifier: "y".into(),
+                        value: Expression::Name("x".into()),
+                    },
+                ],
+                r#in: Box::new(Expression::Name("y".into())),
+            },
+            r#"let
+    x = 1
+    y = x
+in y"#,
         )])
     }
 
