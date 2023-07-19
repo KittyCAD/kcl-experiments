@@ -18,7 +18,11 @@ enum Expression {
     Number(u64),
 }
 
-impl Expression {
+trait Parser: Sized {
+    fn parse(i: Input) -> Result<Self>;
+}
+
+impl Parser for Expression {
     fn parse(i: Input) -> Result<Self> {
         // Numbers are a sequence of digits and underscores.
         let allowed_chars = character::one_of("0123456789_");
@@ -41,7 +45,7 @@ struct Assignment {
     value: Expression,
 }
 
-impl Assignment {
+impl Parser for Assignment {
     fn parse(i: Input) -> Result<Self> {
         let parts = tuple((
             nom_unicode::complete::alphanumeric1,
@@ -60,13 +64,24 @@ impl Assignment {
 mod tests {
     use super::*;
 
+    /// Assert that the given input successfully parses into the expected value.
+    fn assert_parse_eq<'a, T>(expected: T, i: Input)
+    where
+        T: Parser + std::fmt::Debug + PartialEq,
+    {
+        let (i, actual) = T::parse(i).unwrap();
+        assert!(
+            i.is_empty(),
+            "Input should have been empty, but '{i}' remained"
+        );
+        assert_eq!(actual, expected)
+    }
+
     #[test]
     fn test_expr_number() {
         let expected = Expression::Number(123);
         let i = "12_3";
-        let (i, actual) = Expression::parse(i).unwrap();
-        assert!(i.is_empty());
-        assert_eq!(actual, expected);
+        assert_parse_eq(expected, i);
     }
 
     #[test]
@@ -76,8 +91,6 @@ mod tests {
             value: Expression::Number(100),
         };
         let i = "n張 = 100";
-        let (i, actual) = Assignment::parse(i).unwrap();
-        assert!(i.is_empty());
-        assert_eq!(actual, expected);
+        assert_parse_eq(expected, i)
     }
 }
