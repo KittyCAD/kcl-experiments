@@ -72,7 +72,22 @@ pub enum Expression {
         r#let: Vec<Assignment>,
         r#in: Box<Expression>,
     },
-    // TODO: Add a case for basic math, e.g. x + 1 or 3/4
+    Arithmetic {
+        lhs: Box<Expression>,
+        op: Operator,
+        rhs: Box<Expression>,
+    },
+}
+
+/// Expressions can be evaluated (producing a value)
+/// or bound to identifiers by assignments.
+#[derive(Debug)]
+#[cfg_attr(test, derive(Eq, PartialEq))]
+pub enum Operator {
+    Add,
+    Sub,
+    Mul,
+    Div,
 }
 
 /// Assigning a value to a binding, e.g. `n = 100`.
