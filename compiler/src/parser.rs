@@ -14,7 +14,7 @@ use nom::{
 };
 
 pub type Input<'a> = &'a str;
-pub type Result<'a, T> = nom::IResult<Input<'a>, T, VerboseError<Input<'a>>>;
+pub type Result<'a, T, E = VerboseError<Input<'a>>> = nom::IResult<Input<'a>, T, E>;
 
 /// These can't be used as names in KCL programs.
 const RESERVED_KEYWORDS: [&str; 2] = ["let", "in"];
@@ -67,15 +67,24 @@ impl Parser for FnDef {
     fn parse(i: Input) -> Result<Self> {
         // Parse the parts of a function definition.
         let parse_parts = tuple((
-            Identifier::parse,
-            tag(" = "),
-            bracketed(tuple((
-                separated_list0(tag(", "), Parameter::parse),
-                tag(" -> "),
-                Identifier::parse,
-            ))),
-            terminated(tag(" =>"), character::multispace0),
-            Expression::parse,
+            context("function name", Identifier::parse),
+            context("= between function name and definition", tag(" = ")),
+            context(
+                "type signature",
+                bracketed(tuple((
+                    context(
+                        "parameter list",
+                        separated_list0(tag(", "), Parameter::parse),
+                    ),
+                    context("return type arrow ->", tag(" -> ")),
+                    Identifier::parse,
+                ))),
+            ),
+            context(
+                "=> between function header and body",
+                terminated(tag(" =>"), character::multispace0),
+            ),
+            context("function body", Expression::parse),
         ));
 
         // Convert the parts we actually need into a FnDef, ignoring the parts we don't need.
@@ -241,7 +250,30 @@ where
 
 #[cfg(test)]
 mod tests {
+    use nom::error::VerboseErrorKind;
+    use tabled::{Table, Tabled};
+
+    use std::fmt;
+
     use super::*;
+
+    #[derive(Tabled)]
+    struct ParseErrorRow<'a> {
+        input: &'a str,
+        error: DisplayErr,
+    }
+
+    struct DisplayErr(VerboseErrorKind);
+
+    impl fmt::Display for DisplayErr {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            match self.0 {
+                VerboseErrorKind::Context(s) => s.fmt(f),
+                VerboseErrorKind::Char(c) => c.fmt(f),
+                VerboseErrorKind::Nom(kind) => kind.description().fmt(f),
+            }
+        }
+    }
 
     /// Assert that the given input successfully parses into the expected value.
     fn assert_parse<T, I>(tests: Vec<(T, I)>)
@@ -251,10 +283,23 @@ mod tests {
     {
         for (test_id, (expected, i)) in tests.into_iter().enumerate() {
             let s = i.into();
-            let (i, actual) = match T::parse(&s) {
+            let res: Result<T, VerboseError<_>> = T::parse(&s);
+            let (i, actual) = match res {
                 Ok(t) => t,
-                Err(e) => {
-                    panic!("Could not parse: {e:#?}");
+                Err(nom::Err::Error(e) | nom::Err::Failure(e)) => {
+                    eprintln!("Could not parse the test case.");
+                    eprintln!("Here's the error chain. Top row is the last parser tried, i.e. the bottom of the parse tree.");
+                    eprintln!("The bottom row is the root of the parse tree.");
+                    let err_table =
+                        Table::new(e.errors.into_iter().map(|(input, e)| ParseErrorRow {
+                            input,
+                            error: DisplayErr(e),
+                        }));
+                    eprintln!("{err_table}");
+                    panic!("Could not parse test case");
+                }
+                Err(nom::Err::Incomplete(_)) => {
+                    panic!("These are not streaming parsers")
                 }
             };
             assert!(
