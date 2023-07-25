@@ -5,7 +5,9 @@ use std::fmt;
 /// TODO: It should support also:
 ///  - Comments
 ///  - Import statements
-pub type AbstractSyntaxTree<'i> = Vec<FnDef<'i>>;
+pub struct AbstractSyntaxTree<'i> {
+    pub functions: Vec<FnDef<'i>>,
+}
 
 /// A KCL identifier can have a value bound to it.
 /// Basically, it's anything that can be used as the name of a constant, function or type.

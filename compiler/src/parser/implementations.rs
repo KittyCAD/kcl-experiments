@@ -4,14 +4,24 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{self as character, char as one_char},
-    combinator::{map, map_res, recognize},
+    combinator::{all_consuming, map, map_res, recognize},
     error::context,
-    multi::{many1, separated_list0},
+    multi::{many0, many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 
 /// These can't be used as names in KCL programs.
 const RESERVED_KEYWORDS: [&str; 2] = ["let", "in"];
+
+impl<'i> Parser<'i> for AbstractSyntaxTree<'i> {
+    fn parse(i: Input<'i>) -> Result<Self> {
+        let parser = all_consuming(many0(FnDef::parse));
+        context(
+            "program root",
+            map(parser, |functions| AbstractSyntaxTree { functions }),
+        )(i)
+    }
+}
 
 impl<'i> Parser<'i> for Identifier<'i> {
     fn parse(i: Input<'i>) -> Result<'i, Self> {
@@ -234,30 +244,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use nom::error::VerboseErrorKind;
-    use tabled::{Table, Tabled};
 
-    use std::fmt;
+    use tabled::Table;
 
     use super::*;
-
-    #[derive(Tabled)]
-    struct ParseErrorRow<'i> {
-        input: &'i str,
-        error: DisplayErr,
-    }
-
-    struct DisplayErr(VerboseErrorKind);
-
-    impl fmt::Display for DisplayErr {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            match self.0 {
-                VerboseErrorKind::Context(s) => s.fmt(f),
-                VerboseErrorKind::Char(c) => c.fmt(f),
-                VerboseErrorKind::Nom(kind) => kind.description().fmt(f),
-            }
-        }
-    }
+    use crate::displayable_error::{DisplayErr, DisplayableError};
 
     /// Assert that the given input successfully parses into the expected value.
     fn assert_parse<'i, T>(tests: Vec<(T, Input<'i>)>)
@@ -265,7 +256,7 @@ mod tests {
         T: Parser<'i> + std::fmt::Debug + PartialEq,
     {
         for (test_id, (expected, i)) in tests.into_iter().enumerate() {
-            let res: Result<T> = T::parse(&i);
+            let res: Result<T> = T::parse(i);
             let (i, actual) = match res {
                 Ok(t) => t,
                 Err(nom::Err::Error(e) | nom::Err::Failure(e)) => {
@@ -273,9 +264,9 @@ mod tests {
                     eprintln!("Here's the error chain. Top row is the last parser tried, i.e. the bottom of the parse tree.");
                     eprintln!("The bottom row is the root of the parse tree.");
                     let err_table =
-                        Table::new(e.errors.into_iter().map(|(input, e)| ParseErrorRow {
+                        Table::new(e.errors.into_iter().map(|(input, e)| DisplayableError {
                             input,
-                            error: DisplayErr(e),
+                            error: DisplayErr::from(e),
                         }));
                     eprintln!("{err_table}");
                     panic!("Could not parse test case");
@@ -423,7 +414,7 @@ in y"#,
             (
                 Expression::LetIn {
                     r#let: vec![Assignment {
-                        identifier: Identifier("radius".into()),
+                        identifier: Identifier("radius"),
                         value: Expression::Arithmetic {
                             lhs: Box::new(Expression::Number(14)),
                             op: Operator::Mul,
@@ -431,10 +422,10 @@ in y"#,
                         },
                     }],
                     r#in: Box::new(Expression::FnInvocation(FnInvocation {
-                        fn_name: Identifier("circle".into()),
+                        fn_name: Identifier("circle"),
                         args: vec![
-                            Expression::Name(Identifier("radius".into())),
-                            Expression::Name(Identifier("center".into())),
+                            Expression::Name(Identifier("radius")),
+                            Expression::Name(Identifier("center")),
                         ],
                     })),
                 },
