@@ -8,22 +8,16 @@ use nom::{
     bytes::complete::tag,
     character::complete::{self as character, char as one_char},
     combinator::{map, map_res},
+    error::{context, VerboseError},
     multi::{many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 
 pub type Input<'a> = &'a str;
-pub type Result<'a, T> = nom::IResult<Input<'a>, T>;
+pub type Result<'a, T> = nom::IResult<Input<'a>, T, VerboseError<Input<'a>>>;
 
 /// These can't be used as names in KCL programs.
 const RESERVED_KEYWORDS: [&str; 2] = ["let", "in"];
-
-#[cfg(debug_assertions)]
-fn trace(s: &str, i: Input) {
-    eprintln!("Parsing {s} from '{i}'");
-}
-#[cfg(not(debug_assertions))]
-fn trace(_: &str, _: Input) {}
 
 /// Take KCL source code as input and parse it into an AST node.
 pub trait Parser: Sized {
@@ -32,20 +26,25 @@ pub trait Parser: Sized {
 
 impl Parser for Identifier {
     fn parse(i: Input) -> Result<Self> {
-        trace("identifier", i);
-        map_res(Self::parse_maybe_reserved, |id| {
-            // Check reserved keyword list.
-            for reserved_keyword in RESERVED_KEYWORDS {
-                if id.0 == reserved_keyword {
-                    return Err(format!("{id} is a reserved keyword and cannot be used as the name of a function, binding, type etc"));
-                }
+        // Checks if the ID is in the reserved keyword list.
+        let is_reserved_keyword = |id: Identifier| {
+            let is_reserved = RESERVED_KEYWORDS
+                .iter()
+                .any(|reserved_kw| reserved_kw == &&id.0);
+            if is_reserved {
+                Err(format!("{id} is a reserved keyword and cannot be used as the name of a function, binding, type etc"))
+            } else {
+                Ok(id)
             }
-            Ok(id)
-        })(i)
+        };
+
+        let parser = map_res(Self::parse_maybe_reserved, is_reserved_keyword);
+        context("identifier", parser)(i)
     }
 }
 
 impl Identifier {
+    /// Like `Identifier::parse` except it doesn't check if the identifier is a reserved keyword.
     fn parse_maybe_reserved(i: Input) -> Result<Self> {
         // Identifiers cannot start with a number
         let (i, start) = nom_unicode::complete::alpha1(i)?;
@@ -63,75 +62,79 @@ impl Identifier {
 }
 
 impl Parser for FnDef {
+    /// FnDef looks like
+    ///     myCircle = (radius: Distance -> Solid2D) => circle(radius)
     fn parse(i: Input) -> Result<Self> {
-        // Looks like myCircle = (radius: Distance -> Solid2D) => circle(radius)
-        let parts = tuple((
+        // Parse the parts of a function definition.
+        let parse_parts = tuple((
             Identifier::parse,
             tag(" = "),
-            tuple((
-                one_char('('),
+            bracketed(tuple((
                 separated_list0(tag(", "), Parameter::parse),
                 tag(" -> "),
                 Identifier::parse,
-                one_char(')'),
-            )),
+            ))),
             terminated(tag(" =>"), character::multispace0),
             Expression::parse,
         ));
-        map(
-            parts,
-            |(fn_name, _, (_paren_start, params, _, return_type, _paren_end), _, body)| Self {
+
+        // Convert the parts we actually need into a FnDef, ignoring the parts we don't need.
+        let parser = map(
+            parse_parts,
+            |(fn_name, _, (params, _, return_type), _, body)| Self {
                 fn_name,
                 params,
                 return_type,
                 body,
             },
-        )(i)
+        );
+        context("function definition", parser)(i)
     }
 }
 
 impl Parser for Parameter {
     fn parse(i: Input) -> Result<Self> {
         // Looks like `radius: Distance`
-        map(
+        let parser = map(
             separated_pair(Identifier::parse, tag(": "), Identifier::parse),
             |(name, kcl_type)| Self { name, kcl_type },
-        )(i)
+        );
+        context("parameter", parser)(i)
     }
 }
 
 impl Parser for FnInvocation {
     fn parse(i: Input) -> Result<Self> {
-        let parts = tuple((
+        let parse_parts = tuple((
             Identifier::parse,
             one_char('('),
             separated_list0(tag(", "), Expression::parse),
             one_char(')'),
         ));
-        map(parts, |(fn_name, _, args, _)| FnInvocation {
+        let parser = map(parse_parts, |(fn_name, _, args, _)| FnInvocation {
             fn_name,
             args,
-        })(i)
+        });
+        context("function invocation", parser)(i)
     }
 }
 
 impl Parser for Expression {
     fn parse(i: Input) -> Result<Self> {
-        trace("expression", i);
-        alt((
+        let parser = alt((
             Self::parse_arithmetic,
             Self::parse_num,
             Self::parse_let_in,
-            Self::parse_fn_invocation,
+            map(FnInvocation::parse, Self::FnInvocation),
             map(Identifier::parse, Self::Name),
-        ))(i)
+        ));
+        context("expression", parser)(i)
     }
 }
 
 impl Parser for Operator {
     fn parse(i: Input) -> Result<Self> {
-        trace("operator", i);
-        map_res(
+        let parser = map_res(
             alt((one_char('+'), one_char('-'), one_char('*'), one_char('/'))),
             |symbol| {
                 Ok(match dbg!(symbol) {
@@ -142,18 +145,14 @@ impl Parser for Operator {
                     other => return Err(format!("Invalid operator {other}")),
                 })
             },
-        )(i)
+        );
+        context("operator", parser)(i)
     }
 }
 
 impl Expression {
-    fn parse_fn_invocation(i: Input) -> Result<Self> {
-        map(FnInvocation::parse, Self::FnInvocation)(i)
-    }
-
     fn parse_arithmetic(i: Input) -> Result<Self> {
-        let bracketed = |p| delimited(one_char('('), p, one_char(')'));
-        map(
+        let parser = map(
             bracketed(tuple((
                 Self::parse,
                 delimited(one_char(' '), Operator::parse, one_char(' ')),
@@ -164,11 +163,12 @@ impl Expression {
                 op,
                 rhs: Box::new(rhs),
             },
-        )(i)
+        );
+        context("arithmetic", parser)(i)
     }
 
     fn parse_let_in(i: Input) -> Result<Self> {
-        map(
+        let parser = map(
             tuple((
                 tag("let"),
                 character::newline,
@@ -190,21 +190,22 @@ impl Expression {
                     .collect(),
                 r#in: Box::new(expr),
             },
-        )(i)
+        );
+        context("let-in", parser)(i)
     }
 
     fn parse_num(i: Input) -> Result<Self> {
         // Numbers are a sequence of digits and underscores.
-        trace("number", i);
         let allowed_chars = character::one_of("0123456789_");
         let number = nom::multi::many1(allowed_chars);
-        map_res(number, |chars| {
+        let parser = map_res(number, |chars| {
             let digits_only = chars
                 .into_iter()
                 .filter(|c| c.is_ascii_digit())
                 .collect::<String>();
             digits_only.parse().map(Self::Number)
-        })(i)
+        });
+        context("number", parser)(i)
     }
 }
 
@@ -215,8 +216,26 @@ impl Parser for Assignment {
             nom::bytes::complete::tag(" = "),
             Expression::parse,
         ));
-        let mut p = map(parts, |(identifier, _, value)| Self { identifier, value });
-        p(i)
+        let parser = map(parts, |(identifier, _, value)| Self { identifier, value });
+        context("assignment", parser)(i)
+    }
+}
+
+/// Utility parser combinator.
+/// Parses a '(', then the child parser, then a ')'.
+pub fn bracketed<I, O2, E: nom::error::ParseError<I>, G>(
+    mut child_parser: G,
+) -> impl FnMut(I) -> nom::IResult<I, O2, E>
+where
+    I: nom::Slice<std::ops::RangeFrom<usize>> + nom::InputIter,
+    G: nom::Parser<I, O2, E>,
+    <I as nom::InputIter>::Item: nom::AsChar,
+{
+    use nom::Parser;
+    move |input: I| {
+        let (input, _) = one_char('(').parse(input)?;
+        let (input, o2) = child_parser.parse(input)?;
+        one_char(')').parse(input).map(|(i, _)| (i, o2))
     }
 }
 
@@ -232,7 +251,12 @@ mod tests {
     {
         for (test_id, (expected, i)) in tests.into_iter().enumerate() {
             let s = i.into();
-            let (i, actual) = T::parse(&s).unwrap();
+            let (i, actual) = match T::parse(&s) {
+                Ok(t) => t,
+                Err(e) => {
+                    panic!("Could not parse: {e:#?}");
+                }
+            };
             assert!(
                 i.is_empty(),
                 "Input should have been empty, but '{i}' remained. Parsed {actual:#?}."
