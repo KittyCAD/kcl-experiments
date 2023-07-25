@@ -33,6 +33,14 @@ impl<'i> From<Input<'i>> for Identifier<'i> {
     }
 }
 
+#[cfg(test)]
+impl<'i> Identifier<'i> {
+    pub(crate) fn from_span(fragment: &'i str, offset: usize, line: u32) -> Self {
+        // Safe, because we're only doing this in unit tests.
+        unsafe { Self(Input::new_from_raw_offset(offset, line, fragment, ())) }
+    }
+}
+
 /// Function definition
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq))]

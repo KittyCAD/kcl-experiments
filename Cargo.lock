@@ -195,6 +195,7 @@ version = "0.1.0"
 dependencies = [
  "nom",
  "nom-unicode",
+ "nom_locate",
  "tabled",
 ]
 
@@ -325,6 +326,17 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a5c03a4d71ab9740c752c165329e9df13a808093b146dfbef6170ac260771ffe"
 dependencies = [
+ "nom",
+]
+
+[[package]]
+name = "nom_locate"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1e299bf5ea7b212e811e71174c5d1a5d065c4c0ad0c8691ecb1f97e3e66025e"
+dependencies = [
+ "bytecount",
+ "memchr",
  "nom",
 ]
 

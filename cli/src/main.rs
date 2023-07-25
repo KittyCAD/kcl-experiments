@@ -29,7 +29,7 @@ fn main() -> Result<()> {
         bail!("You must either supply a source code file via --file, or pipe source code in via stdin")
     }
     match compiler::parse(&source_code) {
-        Ok(("", _ast)) => {
+        Ok((input, _ast)) if input.fragment().is_empty() => {
             println!("Successfully parsed your program")
         }
         Ok((remaining_input, _ast)) => {

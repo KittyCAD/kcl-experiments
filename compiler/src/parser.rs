@@ -16,7 +16,7 @@ mod implementations;
 /// owning it (take String).
 ///
 /// Here the lifetime 'i represents the lifetime of the input (the KCL source code string).
-pub type Input<'i> = &'i str;
+pub type Input<'i> = nom_locate::LocatedSpan<&'i str>;
 
 /// Result of running a parser.
 ///

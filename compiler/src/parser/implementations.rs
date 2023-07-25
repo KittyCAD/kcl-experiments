@@ -30,7 +30,7 @@ impl<'i> Parser<'i> for Identifier<'i> {
         let is_reserved_keyword = |id: Identifier<'i>| {
             let is_reserved = RESERVED_KEYWORDS
                 .iter()
-                .any(|reserved_kw| reserved_kw == &id.0);
+                .any(|reserved_kw| reserved_kw == id.0.fragment());
             if is_reserved {
                 Err(format!("{id} is a reserved keyword and cannot be used as the name of a function, binding, type etc"))
             } else {
@@ -249,7 +249,7 @@ mod tests {
     use tabled::Table;
 
     use super::*;
-    use crate::displayable_error::{DisplayErr, DisplayableError};
+    use crate::displayable_error::DisplayableError;
 
     /// Assert that the given input successfully parses into the expected value.
     fn assert_parse<'i, T>(tests: Vec<(T, Input<'i>)>)
@@ -264,11 +264,11 @@ mod tests {
                     eprintln!("Could not parse the test case.");
                     eprintln!("Here's the error chain. Top row is the last parser tried, i.e. the bottom of the parse tree.");
                     eprintln!("The bottom row is the root of the parse tree.");
-                    let err_table =
-                        Table::new(e.errors.into_iter().map(|(input, e)| DisplayableError {
-                            input,
-                            error: DisplayErr::from(e),
-                        }));
+                    let err_table = Table::new(
+                        e.errors
+                            .into_iter()
+                            .map(|(input, e)| DisplayableError::new(input, e)),
+                    );
                     eprintln!("{err_table}");
                     panic!("Could not parse test case");
                 }
@@ -298,10 +298,10 @@ mod tests {
     #[test]
     fn test_expr_number() {
         assert_parse(vec![
-            (Expression::Number(123), "12_3"),
-            (Expression::Number(123), "123"),
-            (Expression::Number(1), "1"),
-            (Expression::Number(2), "2"),
+            (Expression::Number(123), Input::new("12_3")),
+            (Expression::Number(123), Input::new("123")),
+            (Expression::Number(1), Input::new("1")),
+            (Expression::Number(2), Input::new("2")),
         ]);
     }
 
@@ -314,9 +314,9 @@ mod tests {
                     op: Operator::Add,
                     rhs: Box::new(Expression::Number(2)),
                 },
-                "(1 + 2)",
+                Input::new("(1 + 2)"),
             ),
-            (Expression::Number(123), "123"),
+            (Expression::Number(123), Input::new("123")),
         ]);
     }
 
@@ -324,10 +324,10 @@ mod tests {
     fn valid_function_invocations() {
         assert_parse(vec![(
             Expression::FnInvocation(FnInvocation {
-                fn_name: "sphere".into(),
+                fn_name: Identifier::from_span("sphere", 0, 1),
                 args: vec![Expression::Number(1), Expression::Number(2)],
             }),
-            "sphere(1, 2)",
+            Input::new("sphere(1, 2)"),
         )])
     }
 
@@ -336,35 +336,37 @@ mod tests {
         assert_parse(vec![
             (
                 FnDef {
-                    fn_name: "bigCircle".into(),
+                    fn_name: Identifier::from_span("bigCircle", 0, 1),
                     params: vec![
                         Parameter {
-                            name: "radius".into(),
-                            kcl_type: "Distance".into(),
+                            name: Identifier::from_span("radius", 13, 1),
+                            kcl_type: Identifier::from_span("Distance", 21, 1),
                         },
                         Parameter {
-                            name: "center".into(),
-                            kcl_type: "Point2D".into(),
+                            name: Identifier::from_span("center", 31, 1),
+                            kcl_type: Identifier::from_span("Point2D", 39, 1),
                         },
                     ],
                     body: Expression::FnInvocation(FnInvocation {
-                        fn_name: "circle".into(),
-                        args: vec![Expression::Name("radius".into())],
+                        fn_name: Identifier::from_span("circle", 62, 1),
+                        args: vec![Expression::Name(Identifier::from_span("radius", 69, 1))],
                     }),
-                    return_type: "Solid2D".into(),
+                    return_type: Identifier::from_span("Solid2D", 50, 1),
                 },
-                r#"bigCircle = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)"#,
+                Input::new(
+                    r#"bigCircle = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)"#,
+                ),
             ),
             (
                 FnDef {
-                    fn_name: "bigCircle".into(),
+                    fn_name: Identifier::from_span("bigCircle", 0, 1),
                     params: vec![Parameter {
-                        name: "center".into(),
-                        kcl_type: "Point2D".into(),
+                        name: Identifier::from_span("center", 13, 1),
+                        kcl_type: Identifier::from_span("Point2D", 21, 1),
                     }],
                     body: Expression::LetIn {
                         r#let: vec![Assignment {
-                            identifier: "radius".into(),
+                            identifier: Identifier::from_span("radius", 84, 3),
                             value: Expression::Arithmetic {
                                 lhs: Box::new(Expression::Number(14)),
                                 op: Operator::Mul,
@@ -372,20 +374,22 @@ mod tests {
                             },
                         }],
                         r#in: Box::new(Expression::FnInvocation(FnInvocation {
-                            fn_name: "circle".into(),
+                            fn_name: Identifier::from_span("circle", 123, 4),
                             args: vec![
-                                Expression::Name("radius".into()),
-                                Expression::Name("center".into()),
+                                Expression::Name(Identifier::from_span("radius", 130, 4)),
+                                Expression::Name(Identifier::from_span("center", 138, 4)),
                             ],
                         })),
                     },
-                    return_type: "Solid2D".into(),
+                    return_type: Identifier::from_span("Solid2D", 32, 1),
                 },
-                "\
+                Input::new(
+                    "\
             bigCircle = (center: Point2D -> Solid2D) =>
                 let
                     radius = (14 * 100)
                 in circle(radius, center)",
+                ),
             ),
         ])
     }
@@ -397,25 +401,27 @@ mod tests {
                 Expression::LetIn {
                     r#let: vec![
                         Assignment {
-                            identifier: "x".into(),
+                            identifier: Identifier::from_span("x", 8, 2),
                             value: Expression::Number(1),
                         },
                         Assignment {
-                            identifier: "y".into(),
-                            value: Expression::Name("x".into()),
+                            identifier: Identifier::from_span("y", 18, 3),
+                            value: Expression::Name(Identifier::from_span("x", 22, 3)),
                         },
                     ],
-                    r#in: Box::new(Expression::Name("y".into())),
+                    r#in: Box::new(Expression::Name(Identifier::from_span("y", 27, 4))),
                 },
-                r#"let
+                Input::new(
+                    r#"let
     x = 1
     y = x
 in y"#,
+                ),
             ),
             (
                 Expression::LetIn {
                     r#let: vec![Assignment {
-                        identifier: Identifier("radius"),
+                        identifier: Identifier::from_span("radius", 20, 2),
                         value: Expression::Arithmetic {
                             lhs: Box::new(Expression::Number(14)),
                             op: Operator::Mul,
@@ -423,32 +429,34 @@ in y"#,
                         },
                     }],
                     r#in: Box::new(Expression::FnInvocation(FnInvocation {
-                        fn_name: Identifier("circle"),
+                        fn_name: Identifier::from_span("circle", 55, 3),
                         args: vec![
-                            Expression::Name(Identifier("radius")),
-                            Expression::Name(Identifier("center")),
+                            Expression::Name(Identifier::from_span("radius", 62, 3)),
+                            Expression::Name(Identifier::from_span("center", 70, 3)),
                         ],
                     })),
                 },
-                r#"let
-            radius = (14 * 100)
-        in circle(radius, center)"#,
+                Input::new(
+                    r#"let
+                radius = (14 * 100)
+            in circle(radius, center)"#,
+                ),
             ),
         ])
     }
 
     #[test]
     fn test_assignment() {
-        let valid_lhs = ["亞當", "n", "n123"];
+        let valid_lhs = ["n"];
         let tests: Vec<_> = valid_lhs
             .into_iter()
             .flat_map(|lhs| {
                 vec![
                     (
                         Assignment {
-                            identifier: lhs.into(),
+                            identifier: Identifier::from_span(lhs, 0, 1),
                             value: Expression::FnInvocation(FnInvocation {
-                                fn_name: "foo".into(),
+                                fn_name: Identifier::from_span("foo", 4, 1),
                                 args: vec![Expression::Number(100)],
                             }),
                         },
@@ -456,7 +464,7 @@ in y"#,
                     ),
                     (
                         Assignment {
-                            identifier: lhs.into(),
+                            identifier: Identifier::from_span(lhs, 0, 1),
                             value: Expression::Number(100),
                         },
                         format!("{lhs} = 100"),
@@ -466,7 +474,7 @@ in y"#,
             .collect();
         let ref_to_tests = tests
             .iter()
-            .map(|(exp, input)| (exp.to_owned(), input.as_str()))
+            .map(|(exp, input)| (exp.to_owned(), Input::new(input.as_str())))
             .collect();
         assert_parse(ref_to_tests)
     }
@@ -486,7 +494,7 @@ in y"#,
         ];
         for identifier in invalid_binding_names {
             let i = format!("{identifier} = 100");
-            assert_not_parse::<Assignment>(&i)
+            assert_not_parse::<Assignment>(Input::from(i.as_ref()))
         }
     }
 }

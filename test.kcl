@@ -1,1 +1,1 @@
-bigCircle = (radius: Distance, center: Point2D -> Solid2D) =<
+bigCircle = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)
