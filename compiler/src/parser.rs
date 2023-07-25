@@ -7,7 +7,7 @@ use nom::{
     branch::alt,
     bytes::complete::tag,
     character::complete::{self as character, char as one_char},
-    combinator::{map, map_res},
+    combinator::{map, map_res, recognize},
     error::{context, VerboseError},
     multi::{many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
@@ -46,18 +46,13 @@ impl Parser for Identifier {
 impl Identifier {
     /// Like `Identifier::parse` except it doesn't check if the identifier is a reserved keyword.
     fn parse_maybe_reserved(i: Input) -> Result<Self> {
-        // Identifiers cannot start with a number
-        let (i, start) = nom_unicode::complete::alpha1(i)?;
-        // But after the first char, they can include numbers.
-        let (i, end) = nom_unicode::complete::alphanumeric0(i)?;
-        // TODO: This shouldn't need to allocate a string, I should be able to return &str here, but
-        // the compiler doesn't know that `start` and `end` are contiguous slices. I know there's a
-        // way to achieve this, but I don't know what it is yet. Nor is it important enough to worry
-        // about yet.
-        let mut identifier = String::with_capacity(start.len() + end.len());
-        identifier.push_str(start);
-        identifier.push_str(end);
-        Ok((i, Self(identifier)))
+        let parser = preceded(
+            // Identifiers cannot start with a number
+            nom_unicode::complete::alpha1,
+            // But after the first char, they can include numbers.
+            nom_unicode::complete::alphanumeric0,
+        );
+        map(recognize(parser), |s: &str| Self(s.to_owned()))(i)
     }
 }
 
