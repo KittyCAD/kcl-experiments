@@ -1,5 +1,4 @@
 //! Implements the Parser trait for all the AST types.
-use crate::{ast::*, parser::*};
 use nom::{
     branch::alt,
     bytes::complete::tag,
@@ -9,6 +8,8 @@ use nom::{
     multi::{many0, many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
+
+use crate::{ast::*, parser::*};
 
 /// These can't be used as names in KCL programs.
 const RESERVED_KEYWORDS: [&str; 2] = ["let", "in"];

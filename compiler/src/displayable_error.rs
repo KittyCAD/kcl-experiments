@@ -1,5 +1,6 @@
-use nom::error::VerboseErrorKind;
 use std::fmt;
+
+use nom::error::VerboseErrorKind;
 
 #[derive(tabled::Tabled)]
 pub struct DisplayableError<'i> {

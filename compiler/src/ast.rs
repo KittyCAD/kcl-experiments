@@ -1,6 +1,8 @@
 //! Abstract syntax tree that KCL files get parsed into.
 use std::fmt;
 
+use crate::parser::Input;
+
 /// For now, a KCL program is just a series of function definitions.
 /// TODO: It should support also:
 ///  - Comments
@@ -14,7 +16,7 @@ pub struct AbstractSyntaxTree<'i> {
 /// E.g. in `x = 1` the identifier is the name `x`.
 #[derive(Debug)]
 #[cfg_attr(test, derive(Eq, PartialEq, Clone))]
-pub struct Identifier<'i>(pub &'i str);
+pub struct Identifier<'i>(pub Input<'i>);
 
 impl<'i> fmt::Display for Identifier<'i> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -25,8 +27,8 @@ impl<'i> fmt::Display for Identifier<'i> {
 // In tests, you can turn a Rust string into an identifier.
 // In prod, use the parser, because this does not guarantee that the string is a valid identifier.
 #[cfg(test)]
-impl<'i> From<&'i str> for Identifier<'i> {
-    fn from(value: &'i str) -> Self {
+impl<'i> From<Input<'i>> for Identifier<'i> {
+    fn from(value: Input<'i>) -> Self {
         Self(value)
     }
 }
