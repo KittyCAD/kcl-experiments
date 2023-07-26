@@ -114,11 +114,9 @@ impl<'i> Parser<'i> for FnInvocation<'i> {
     fn parse(i: Input<'i>) -> Result<Self> {
         let parse_parts = tuple((
             Identifier::parse,
-            one_char('('),
-            separated_list0(tag(", "), Expression::parse),
-            one_char(')'),
+            bracketed(separated_list0(tag(", "), Expression::parse)),
         ));
-        let parser = map(parse_parts, |(fn_name, _, args, _)| FnInvocation {
+        let parser = map(parse_parts, |(fn_name, args)| FnInvocation {
             fn_name,
             args,
         });
@@ -144,7 +142,7 @@ impl<'i> Parser<'i> for Operator {
         let parser = map_res(
             alt((one_char('+'), one_char('-'), one_char('*'), one_char('/'))),
             |symbol| {
-                Ok(match dbg!(symbol) {
+                Ok(match symbol {
                     '+' => Self::Add,
                     '-' => Self::Sub,
                     '*' => Self::Mul,
@@ -228,21 +226,26 @@ impl<'i> Parser<'i> for Assignment<'i> {
     }
 }
 
-/// Utility parser combinator.
-/// Parses a '(', then the child parser, then a ')'.
-pub fn bracketed<I, O2, E: nom::error::ParseError<I>, G>(
-    mut child_parser: G,
-) -> impl FnMut(I) -> nom::IResult<I, O2, E>
+/// Utility parser combinator. It wraps a child parser.
+/// Returns a parser which parses and discards a '(',
+/// then runs the child parser,
+/// then parses and discards a ')'.
+/// Returns whatever the child parser returned.
+pub fn bracketed<I, O, E: nom::error::ParseError<I>, P>(
+    mut child_parser: P,
+) -> impl FnMut(I) -> nom::IResult<I, O, E>
 where
     I: nom::Slice<std::ops::RangeFrom<usize>> + nom::InputIter,
-    G: nom::Parser<I, O2, E>,
+    P: nom::Parser<I, O, E>,
     <I as nom::InputIter>::Item: nom::AsChar,
 {
     use nom::Parser;
-    move |input: I| {
-        let (input, _) = one_char('(').parse(input)?;
-        let (input, o2) = child_parser.parse(input)?;
-        one_char(')').parse(input).map(|(i, _)| (i, o2))
+    // Remember, `i` in Nom parsers always means "input".
+    move |i: I| {
+        let (i, _) = one_char('(').parse(i)?;
+        let (i, output) = child_parser.parse(i)?;
+        let (i, _) = one_char(')').parse(i)?;
+        Ok((i, output))
     }
 }
 
