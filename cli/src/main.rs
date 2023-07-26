@@ -14,22 +14,27 @@ struct Args {
     file: Option<PathBuf>,
 }
 
-fn main() -> Result<()> {
-    let Args { file } = Args::parse();
-
-    // Open the KCL file.
-    let mut input = stdin();
-    let mut source_code = String::new();
-    if !input.is_terminal() {
-        input
-            .read_to_string(&mut source_code)
-            .wrap_err("could not read from stdin")?;
-    } else if let Some(file) = file {
-        source_code = std::fs::read_to_string(&file)
-            .wrap_err(format!("could not read {}", file.display()))?;
-    } else {
-        bail!("You must either supply a source code file via --file, or pipe source code in via stdin")
+impl Args {
+    /// Read a KCL file from wherever the user said to.
+    fn read_input_source_code(&self) -> Result<String> {
+        let mut input = stdin();
+        let mut source_code = String::new();
+        if !input.is_terminal() {
+            input
+                .read_to_string(&mut source_code)
+                .wrap_err("could not read from stdin")?;
+            Ok(source_code)
+        } else if let Some(ref file) = self.file {
+            std::fs::read_to_string(file).wrap_err(format!("could not read {}", file.display()))
+        } else {
+            bail!("You must either supply a source code file via --file, or pipe source code in via stdin")
+        }
     }
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+    let source_code = args.read_input_source_code()?;
 
     // Parse the KCL file and print results.
     match compiler::parse(&source_code) {
