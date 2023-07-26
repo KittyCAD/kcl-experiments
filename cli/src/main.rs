@@ -5,7 +5,7 @@ use std::{
 
 use clap::Parser;
 use color_eyre::eyre::{bail, Result, WrapErr};
-use tabled::Table;
+use tabled::{Table, Tabled};
 
 #[derive(Parser, Debug)]
 #[command(version, about, name = "KCL Compiler", long_about = None)]
@@ -16,6 +16,8 @@ struct Args {
 
 fn main() -> Result<()> {
     let Args { file } = Args::parse();
+
+    // Open the KCL file.
     let mut input = stdin();
     let mut source_code = String::new();
     if !input.is_terminal() {
@@ -28,9 +30,11 @@ fn main() -> Result<()> {
     } else {
         bail!("You must either supply a source code file via --file, or pipe source code in via stdin")
     }
+
+    // Parse the KCL file and print results.
     match compiler::parse(&source_code) {
-        Ok((input, _ast)) if input.fragment().is_empty() => {
-            println!("Successfully parsed your program")
+        Ok((input, ast)) if input.fragment().is_empty() => {
+            print_program_analysis(ast);
         }
         Ok((remaining_input, _ast)) => {
             bail!("Part of your source code was not parsed: {remaining_input}")
@@ -43,4 +47,31 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn print_program_analysis(ast: compiler::AbstractSyntaxTree<'_>) {
+    println!("Successfully parsed your program. These are its functions.");
+
+    #[derive(Tabled)]
+    struct Row<'a> {
+        #[tabled(rename = "Name")]
+        function_name: &'a str,
+        line: u32,
+        columns: String,
+    }
+    let tbl = tabled::Table::new(ast.all_functions().map(
+        |(
+            function_name,
+            compiler::semantics::SourceRange {
+                start_line,
+                start_column,
+                length,
+            },
+        )| Row {
+            function_name,
+            line: start_line,
+            columns: format!("{start_column}, {}", start_column + length),
+        },
+    ));
+    println!("{tbl}");
 }
