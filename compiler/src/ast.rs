@@ -7,6 +7,7 @@ use crate::parser::Input;
 /// TODO: It should support also:
 ///  - Comments
 ///  - Import statements
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AbstractSyntaxTree<'i> {
     pub functions: Vec<FnDef<'i>>,
 }
@@ -14,8 +15,7 @@ pub struct AbstractSyntaxTree<'i> {
 /// A KCL identifier can have a value bound to it.
 /// Basically, it's anything that can be used as the name of a constant, function or type.
 /// E.g. in `x = 1` the identifier is the name `x`.
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq, Clone))]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Identifier<'i>(pub Input<'i>);
 
 impl<'i> fmt::Display for Identifier<'i> {
@@ -42,8 +42,7 @@ impl<'i> Identifier<'i> {
 }
 
 /// Function definition
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FnDef<'i> {
     pub fn_name: Identifier<'i>,
     pub params: Vec<Parameter<'i>>,
@@ -52,16 +51,14 @@ pub struct FnDef<'i> {
 }
 
 /// Parameters for declared functions
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq))]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Parameter<'i> {
     pub name: Identifier<'i>,
     pub kcl_type: Identifier<'i>,
 }
 
 /// Function invocation
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq, Clone))]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct FnInvocation<'i> {
     pub fn_name: Identifier<'i>,
     pub args: Vec<Expression<'i>>,
@@ -69,8 +66,7 @@ pub struct FnInvocation<'i> {
 
 /// Expressions can be evaluated (producing a value)
 /// or bound to identifiers by assignments.
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq, Clone))]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum Expression<'i> {
     /// Numbers are expressions
     Number(u64),
@@ -93,8 +89,7 @@ pub enum Expression<'i> {
 
 /// Expressions can be evaluated (producing a value)
 /// or bound to identifiers by assignments.
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq, Clone))]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum Operator {
     Add,
     Sub,
@@ -103,8 +98,7 @@ pub enum Operator {
 }
 
 /// Assigning a value to a binding, e.g. `n = 100`.
-#[derive(Debug)]
-#[cfg_attr(test, derive(Eq, PartialEq, Clone))]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Assignment<'i> {
     pub identifier: Identifier<'i>,
     pub value: Expression<'i>,

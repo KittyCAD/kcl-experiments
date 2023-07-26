@@ -2,10 +2,10 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{self as character, char as one_char},
-    combinator::{all_consuming, map, map_res, recognize},
+    character::complete::{self as character, char as one_char, newline},
+    combinator::{all_consuming, map, map_res, opt, recognize},
     error::context,
-    multi::{many0, many1, separated_list0},
+    multi::{many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
 };
 
@@ -16,7 +16,10 @@ const RESERVED_KEYWORDS: [&str; 2] = ["let", "in"];
 
 impl<'i> Parser<'i> for AbstractSyntaxTree<'i> {
     fn parse(i: Input<'i>) -> Result<Self> {
-        let parser = all_consuming(many0(FnDef::parse));
+        let parser = all_consuming(terminated(
+            separated_list0(many1(newline), FnDef::parse),
+            opt(newline),
+        ));
         context(
             "program root",
             map(parser, |functions| AbstractSyntaxTree { functions }),
@@ -328,6 +331,57 @@ mod tests {
                 args: vec![Expression::Number(1), Expression::Number(2)],
             }),
             Input::new("sphere(1, 2)"),
+        )])
+    }
+
+    #[test]
+    fn valid_program() {
+        assert_parse(vec![(
+            AbstractSyntaxTree {
+                functions: vec![
+                    FnDef {
+                        fn_name: Identifier::from_span("bigCircle1", 0, 1),
+                        params: vec![
+                            Parameter {
+                                name: Identifier::from_span("radius", 14, 1),
+                                kcl_type: Identifier::from_span("Distance", 22, 1),
+                            },
+                            Parameter {
+                                name: Identifier::from_span("center", 32, 1),
+                                kcl_type: Identifier::from_span("Point2D", 40, 1),
+                            },
+                        ],
+                        body: Expression::FnInvocation(FnInvocation {
+                            fn_name: Identifier::from_span("circle", 63, 1),
+                            args: vec![Expression::Name(Identifier::from_span("radius", 70, 1))],
+                        }),
+                        return_type: Identifier::from_span("Solid2D", 51, 1),
+                    },
+                    FnDef {
+                        fn_name: Identifier::from_span("bigCircle2", 78, 2),
+                        params: vec![
+                            Parameter {
+                                name: Identifier::from_span("radius", 92, 2),
+                                kcl_type: Identifier::from_span("Distance", 100, 2),
+                            },
+                            Parameter {
+                                name: Identifier::from_span("center", 110, 2),
+                                kcl_type: Identifier::from_span("Point2D", 118, 2),
+                            },
+                        ],
+                        body: Expression::FnInvocation(FnInvocation {
+                            fn_name: Identifier::from_span("circle", 141, 2),
+                            args: vec![Expression::Name(Identifier::from_span("radius", 148, 2))],
+                        }),
+                        return_type: Identifier::from_span("Solid2D", 129, 2),
+                    },
+                ],
+            },
+            Input::new(
+                r#"bigCircle1 = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)
+bigCircle2 = (radius: Distance, center: Point2D -> Solid2D) => circle(radius)
+"#,
+            ),
         )])
     }
 
