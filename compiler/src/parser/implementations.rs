@@ -53,10 +53,26 @@ impl<'i> Identifier<'i> {
             // Identifiers cannot start with a number
             nom_unicode::complete::alpha1,
             // But after the first char, they can include numbers.
-            nom_unicode::complete::alphanumeric0,
+            others,
         );
         map(recognize(parser), Self)(i)
     }
+}
+
+#[doc = "Recognizes zero or more alphabetic and numeric Unicode characters."]
+#[inline]
+pub fn others<T, Error>(input: T) -> nom::IResult<T, T, Error>
+where
+    T: nom::InputTakeAtPosition,
+    <T as nom::InputTakeAtPosition>::Item: nom_unicode::IsChar,
+    Error: nom::error::ParseError<T>,
+{
+    #[inline(always)]
+    pub fn is_alphanumeric<T: nom_unicode::IsChar>(item: T) -> bool {
+        let i = item.as_char();
+        i.is_alphanumeric() || i == '_'
+    }
+    input.split_at_position_complete(|item| !is_alphanumeric(item))
 }
 
 impl<'i> Parser<'i> for FnDef<'i> {
@@ -537,6 +553,15 @@ in y"#,
     }
 
     #[test]
+    fn test_valid_variables() {
+        let tests = vec![(
+            Identifier::from_span("n_hello", 0, 1),
+            Input::new("n_hello"),
+        )];
+        assert_parse::<Identifier>(tests)
+    }
+
+    #[test]
     fn test_invalid_variables() {
         let invalid_binding_names = [
             // These are genuinely invalid.
@@ -546,8 +571,6 @@ in y"#,
             "let",
             "in",
             "0000000aassdfasdfasdfasdf013423452342134234234234",
-            // TODO: fix this, it should be valid.
-            "n_hello",
         ];
         for identifier in invalid_binding_names {
             let i = format!("{identifier} = 100");
