@@ -7,6 +7,7 @@ use nom::{
     error::context,
     multi::{many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
+    InputTakeAtPosition,
 };
 
 use crate::{ast::*, parser::*};
@@ -49,11 +50,17 @@ impl<'i> Parser<'i> for Identifier<'i> {
 impl<'i> Identifier<'i> {
     /// Like `Identifier::parse` except it doesn't check if the identifier is a reserved keyword.
     fn parse_maybe_reserved(i: Input<'i>) -> Result<Self> {
+        /// These characters aren't allowed in identifiers.
+        fn not_allowed_in_identifier<T: nom_unicode::IsChar>(item: T) -> bool {
+            let i = item.as_char();
+            !i.is_alphanumeric() && i != '_'
+        }
+
         let parser = preceded(
-            // Identifiers cannot start with a number
+            // Identifiers must start with an alphabetic character.
             nom_unicode::complete::alpha1,
-            // But after the first char, they can include numbers.
-            nom_unicode::complete::alphanumeric0,
+            // But after the first char, they can include numbers and underscores.
+            |i: Input<'i>| i.split_at_position_complete(not_allowed_in_identifier),
         );
         map(recognize(parser), Self)(i)
     }
@@ -537,6 +544,15 @@ in y"#,
     }
 
     #[test]
+    fn test_valid_variables() {
+        let tests = vec![(
+            Identifier::from_span("n_hello", 0, 1),
+            Input::new("n_hello"),
+        )];
+        assert_parse::<Identifier>(tests)
+    }
+
+    #[test]
     fn test_invalid_variables() {
         let invalid_binding_names = [
             // These are genuinely invalid.
@@ -546,8 +562,6 @@ in y"#,
             "let",
             "in",
             "0000000aassdfasdfasdfasdf013423452342134234234234",
-            // TODO: fix this, it should be valid.
-            "n_hello",
         ];
         for identifier in invalid_binding_names {
             let i = format!("{identifier} = 100");
