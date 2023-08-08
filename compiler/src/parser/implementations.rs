@@ -50,10 +50,12 @@ impl<'i> Parser<'i> for Identifier<'i> {
 impl<'i> Identifier<'i> {
     /// Like `Identifier::parse` except it doesn't check if the identifier is a reserved keyword.
     fn parse_maybe_reserved(i: Input<'i>) -> Result<Self> {
+        /// These characters aren't allowed in identifiers.
         fn not_allowed_in_identifier<T: nom_unicode::IsChar>(item: T) -> bool {
             let i = item.as_char();
-            !(i.is_alphanumeric() || i == '_')
+            !i.is_alphanumeric() && i != '_'
         }
+
         let parser = preceded(
             // Identifiers must start with an alphabetic character.
             nom_unicode::complete::alpha1,
