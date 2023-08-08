@@ -7,6 +7,7 @@ use nom::{
     error::context,
     multi::{many1, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated, tuple},
+    InputTakeAtPosition,
 };
 
 use crate::{ast::*, parser::*};
@@ -49,30 +50,18 @@ impl<'i> Parser<'i> for Identifier<'i> {
 impl<'i> Identifier<'i> {
     /// Like `Identifier::parse` except it doesn't check if the identifier is a reserved keyword.
     fn parse_maybe_reserved(i: Input<'i>) -> Result<Self> {
+        fn not_allowed_in_identifier<T: nom_unicode::IsChar>(item: T) -> bool {
+            let i = item.as_char();
+            !(i.is_alphanumeric() || i == '_')
+        }
         let parser = preceded(
-            // Identifiers cannot start with a number
+            // Identifiers must start with an alphabetic character.
             nom_unicode::complete::alpha1,
-            // But after the first char, they can include numbers.
-            others,
+            // But after the first char, they can include numbers and underscores.
+            |i: Input<'i>| i.split_at_position_complete(not_allowed_in_identifier),
         );
         map(recognize(parser), Self)(i)
     }
-}
-
-#[doc = "Recognizes zero or more alphabetic and numeric Unicode characters."]
-#[inline]
-pub fn others<T, Error>(input: T) -> nom::IResult<T, T, Error>
-where
-    T: nom::InputTakeAtPosition,
-    <T as nom::InputTakeAtPosition>::Item: nom_unicode::IsChar,
-    Error: nom::error::ParseError<T>,
-{
-    #[inline(always)]
-    pub fn is_alphanumeric<T: nom_unicode::IsChar>(item: T) -> bool {
-        let i = item.as_char();
-        i.is_alphanumeric() || i == '_'
-    }
-    input.split_at_position_complete(|item| !is_alphanumeric(item))
 }
 
 impl<'i> Parser<'i> for FnDef<'i> {
