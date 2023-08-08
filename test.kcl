@@ -1,0 +1,5 @@
+bigCircle = (radius: Distance, center: Point2D -> Solid2D) =>
+    circle(center, (radius * 10))
+
+smallCircle = (radius: Distance, center: Point2D -> Solid2D) =>
+    circle(Point2D(0, 0), 4)
