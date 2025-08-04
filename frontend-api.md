@@ -14,6 +14,7 @@ Examples of changes that we may want in the future that likely require significa
 
 - Better parser (better error messages, incremental parsing, error recovery)
 - Static analysis
+- Performance: String interning
 - Performance: Packed array of AST nodes, instead of heap-allocated nodes with pointers.
 - Performance: Bytecode VM
 
@@ -98,7 +99,7 @@ These still need to be investigated from `modifyAst.ts`.
 
 You may have noticed above that some APIs require a reference to a node using `KclNodeId`.  How does the caller obtain such an ID?  There will be a general query API, largely inspired by code that's currently in `queryAst.ts`.
 
-- **Find Node at Cursor Location:** Given a `KclProgram` and cursor location, returns the `KclNodeInfo` of the most specific AST node or `undefined` if not found.
+- **Find Node at Source Location:** Given a `KclProgram` and `SourceRange`, returns the `KclNodeInfo` of the most specific AST node or `undefined` if not found.
 - **Look Up Node Info:** \[`getNodeFromPath()`\] Given a `KclProgram` and `KclNodeId`, get extra information of the AST node.  Returns the corresponding `KclNodeInfo` or `undefined` if not found.
 - **Find Relevant Parent Node Of Type:** \[`getNodeFromPath()` with `stopAt`\] Given a `KclProgram`, a `KclNodeId`, and a target `KclNodeKind`, find node's parent of the given target kind, limited to relevant nodes, and return its `KclNodeId`.  For example, given a node that's a function call and a target of a variable declaration, return the variable declaration that the function call is in its initializer.  If it's not part of a variable declaration initializer, none will be returned.  If the call is inside a function body that's part of a variable declaration outside the function, none will be returned since the variable declaration outside the function isn't relevant.
 - **Is Top-Level Variable Defined?** \[`traverse()` in `ModelingMachineProvider.tsx`\] Given a `KclProgram` and a string identifier, returns true if it's defined.
