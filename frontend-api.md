@@ -24,7 +24,7 @@ Another motivating factor in why we're proposing this approach is that we'd like
 
 The AST types including `Program`, `BodyItem`, `Expr`, `VariableDeclaration`, `Identifier`, etc. will not be exposed to TS via ts-rs bindings.
 
-Instead, there will be general opaque types and more specific facade types that only contain high-level information relevant to the frontend.
+Instead, there will be general opaque types and more specific [facade](https://en.wikipedia.org/wiki/Facade_pattern) types that only contain high-level information relevant to the frontend.
 
 The general opaque types are:
 
