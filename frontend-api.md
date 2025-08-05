@@ -99,13 +99,14 @@ These still need to be investigated from `modifyAst.ts`.
 
 You may have noticed above that some APIs require a reference to a node using `KclNodeId`.  How does the caller obtain such an ID?  There will be a general query API, largely inspired by code that's currently in `queryAst.ts`.
 
-- **Find Node at Source Location:** Given a `KclProgram` and `SourceRange`, returns the `KclNodeInfo` of the most specific AST node or `undefined` if not found.
+- **Find Node at Source Location:** \[`getNodeFromPath()` and `getNodePathFromSourceRange()`\] Given a `KclProgram` and `SourceRange`, returns the `KclNodeInfo` of the most specific AST node or `undefined` if not found.
 - **Look Up Node Info:** \[`getNodeFromPath()`\] Given a `KclProgram` and `KclNodeId`, get extra information of the AST node.  Returns the corresponding `KclNodeInfo` or `undefined` if not found.
 - **Find Relevant Parent Node Of Type:** \[`getNodeFromPath()` with `stopAt`\] Given a `KclProgram`, a `KclNodeId`, and a target `KclNodeKind`, find node's parent of the given target kind, limited to relevant nodes, and return its `KclNodeId`.  For example, given a node that's a function call and a target of a variable declaration, return the variable declaration that the function call is in its initializer.  If it's not part of a variable declaration initializer, none will be returned.  If the call is inside a function body that's part of a variable declaration outside the function, none will be returned since the variable declaration outside the function isn't relevant.
 - **Is Top-Level Variable Defined?** \[`traverse()` in `ModelingMachineProvider.tsx`\] Given a `KclProgram` and a string identifier, returns true if it's defined.
 - **Find Stdlib Calls:** \[`traverse()` in `addEdgeTreatment.ts`\] Given a `KclProgram`, an optional `KclNodeId` representing the subtree to search, and a set of (`string` name?) target stdlib functions, find all call expressions calling any of the stdlib functions and return an array of `KclNodeId`s.  This is a best-effort find since, in the future, we'll be able to call arbitrary expressions, not just identifiers, store stdlib function references in variables, etc., meaning that the only way this can work perfectly is to execute the program.
 - **Does Call Define Given Tag Name?:** \[`traverse()` in `addEdgeTreatment.ts`\]
-- **Find First Object Expression with Key Name:** \[`traverse()` in `addEdgeTreatment.ts`\] Similar to Find Stdlb Call but looking for the key in an object expression.
+- **Find All Subexpressions with Type:**
+    - \[`traverse()` in `addEdgeTreatment.ts`\] Similar to Find Stdlib Call but looking for the first object expression with a specific.
 - **Get Name of Tag that Node Defines:** \[`traverse()` in `addEdgeTreatment.ts`\]
 - **Does Tags Argument Refer to Tag:** \[`traverse()` in `addEdgeTreatment.ts`\] Not sure whether this one should have its own dedicated function since it's so specific. The current TS code is looking at the `tags` argument to fillet() and chamfer() calls and determining whether `getOppositeEdge()` or `getNextAdjacentEdge()` is called on a specific tag name.
 
