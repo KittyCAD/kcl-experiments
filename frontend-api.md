@@ -137,7 +137,7 @@ Note: I don't think the `getNodeFromPath()` `returnEarly` parameter needs to exi
 
 ## Traversal API
 
-In order to have a way to implement very specific queries, instead of many one-off functions, there will be a `traverse()` API that does a DFS traversal of the AST, calling a TS callback on each node, providing `KclNodeInfo` of the node.  Crucially, this doesn't expose the internal representation of the nodes, but only their facade.  This is a last resort for callers when a more-focused API doesn't exist.
+In order to have a way to implement very specific queries, instead of many one-off functions, there will be a `traverse()` API that does a DFS traversal of the AST, calling a TS callback on each node, providing `KclNodeInfo` of the node.  Crucially, this doesn't expose the internal representation of the nodes, but only their facade.  This is a last resort for callers when a more-focused API doesn't exist (we should assess the situations where this gets used, and see if it signals holes in our query helpers).
 
 ## Initial Implementation
 
