@@ -143,7 +143,7 @@ In order to have a way to implement very specific queries, instead of many one-o
 
 In the future, the AST may not be represented as heap-allocated enums with pointers to child nodes.  In that future, we may have different solutions.  But in the interim, we need to be able to implement the same functionality that we do now without re-writing everything.
 
-- **Finding a node:** Until we change the representation, the only way to get a Rust-reference to a node in the AST is to traverse it.  The opaque `KclNodeId` internally will be a modified Rust `NodePath`.  In order to make `NodePath` resistant to positional changes like inserting a variable at the top of the program body, all `Vec` indexed fields like `body_items` will be replaced with a map, where the key is the node's (private to Rust) integer ID.  Additional ordering information will be stored, but this is not part of the public `KclNodeId`.  If every AST node is given a private integer ID, and its public key is a list of private IDs to reach it, then the AST can be thought of as a trie.
+- **Finding a node:** Until we change the representation, the only way to get a Rust-reference to a node in the AST is to traverse it.  The opaque `KclNodeId` internally will be a modified Rust `NodePath`.  In order to make `NodePath` resistant to positional changes like inserting a variable at the top of the program body, all `Vec` indexed fields like `body_items` will be replaced with a map, where the key is the node's (private to Rust) integer ID.  Additional ordering information will be stored, but this is not part of the public `KclNodeId`.  If every AST node is given a private, sequential integer ID, and its public key is a list of private IDs to reach it, then the AST can be thought of as a trie.
 - **Finding a node's parents:** With the current AST representation, it's non-trivial to have parent references.  By having `KclNodeId`s be `NodePath` internally, we can either build up the parent references as we traverse to the node or simply stop traversing early.  The latter is what TS currently does.
 
 Since `KclNodeId` is opaque, the internal representation can be changed in the future when the AST representation changes without affecting callers.  For example, say that we change the AST to be a packed array of nodes, where child references are indexes into the array.
@@ -159,21 +159,33 @@ TODO
 
 # Drawbacks
 
-## Transition Isn't as Straightforward as High-Level Functions
+The reason not to do this is that it's potentially a lot of work.  But we think that the investment will be worth it.
+
+Another potential drawback is that if we ever add plugins implemented in JavaScript, it may limit their ability.  But we don't have any concrete plans to implement this anytime soon.  If the APIs are powerful enough, it will address this concern.
+
+# Rationale and alternatives
+
+## Transitioning to the Proposed API Isn't as Straightforward as High-Level Functions
 
 An alternate approach is to use high-level functions or methods, one for each code-mod from the user's perspective.  An example would be adding a parallel constraint to two selected segments.  In this approach, there would be a Rust function for doing exactly this.  A benefit of this is that transitioning to it might be as simple as porting existing code from TS to Rust, which could be done incrementally.
 
-However, this would probably make it more difficult for frontend developers working in TS to add new frontend features that need a slightly different code-mod.  They would be forced to switch to Rust.  For this reason, we think that it would be more beneficial if the API allowed high-level decision-making to be implemented in TS and use the refactoring APIs to query and modify in separate lower-level calls.
+However, this would probably make it more difficult for frontend developers working in TS to add new frontend features that need a slightly different code-mod.  They would be forced to switch to Rust.  It also wouldn't reduce the burden for making AST changes, only move it to Rust code.  For these reasons, we think that it would be more beneficial if the API allowed high-level decision-making to be implemented in TS and use the refactoring APIs to query and modify in separate lower-level calls, creating a clear boundary and interface.
 
-## Relies on Stable Node IDs
+## Stable Node IDs: Content-Based Addressing Vs. Sequential IDs
 
-This proposal uses AST Node IDs that need to be stable across edits.  This is fine when the edits are done via the API.  But when KCL source code is edited by the user and the source needs to be re-parsed, it may be challenging or ambiguous to preserve AST node IDs from the previous parse.  This ability could be desirable for collaborative editing, for example, where only textual diffs are sent over the wire while the user could be doing anything else in the app.
+This proposal uses AST Node IDs that need to be stable across edits.  Sequential IDs are fine when the edits are done via the API.  IDs can be preserved.
 
-We don't currently need this feature, so perhaps we shouldn't be worrying about it.  When a user enters a command-bar flow, we don't generally allow the user to also edit code while the app is holding on to node references via `PathToNode`s.  When this does happen and a `PathToNode` is looked up and no node is found, it's a bug.
+But when KCL source code is edited by the user and the source needs to be re-parsed, it may be challenging or ambiguous to preserve sequential AST node IDs from the previous parse.  This ability could be desirable for collaborative editing, for example, where only textual diffs are sent over the wire while the user could be doing anything else in the app.
 
-## Immutable Interface May Be Inefficient or More Work
+For this reason, the idea came up to use content-based addressing of nodes to make AST node identifiers that were resistant to positional changes after node insertions and deletions.
 
-In general, it's easier to implement a mutable interface that's efficient.  Immutable interfaces that are also reasonably efficient are possible, but they're generally more work to implement.  The most basic and straightforward approach relies on structural sharing, i.e. avoiding cloning or rebuilding of shared subtrees.  Structural sharing is trivial in languages with garbage collection.  Rust can make that a bit more annoying, depending on the details.  But I think the trade-off is worth it to have an immutable interface to avoid bugs that are hard to reason about in the frontend code due to concurrency.
+But we don't currently need this feature, so perhaps we shouldn't be worrying about it.  When a user enters a command-bar flow, we don't generally allow the user to also edit code while the app is holding on to node references via `PathToNode`s.  When this does happen and a `PathToNode` is looked up and no node is found, it's a bug.
+
+## Mutable Vs. Immutable Interface
+
+In general, it's easier to implement a mutable interface that's efficient, both in terms of speed and memory usage.  Immutable interfaces that are also reasonably efficient are possible, but they're generally more work to implement.  The most basic and straightforward approach relies on structural sharing, i.e. avoiding cloning or rebuilding of shared subtrees.  Structural sharing is trivial in languages with garbage collection.  Rust can make that a bit more annoying, depending on the details.  But I think the trade-off is worth it to have an immutable interface to avoid bugs that are hard to reason about in the frontend code due to concurrency.
+
+We know that there are a few use cases like dragging segment points in sketch mode that require low latency.  If performance of the immutable API is a problem, we could implement special APIs for these use cases that mutate that are exceptions to the general rule of immutability.
 
 # Prior Art
 
