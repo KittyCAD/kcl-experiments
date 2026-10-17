@@ -168,8 +168,6 @@ Add `rust/kcl-lib/std/assemblies.kcl`. It may contain module documentation and r
 
 Expose the module and new declarations only in KCL 4. Preserve ordinary explicit-import behavior in that version. Automatically opening the module inside an assembly must use its actual exports, so adding a future exported KCL function does not require another hard-coded list.
 
-Do not automatically open `std::solver`. Solver names already available in the captured lexical environment remain available normally.
-
 ### 2.4 Scope construction and returned members
 
 Use this scope structure, from outermost to innermost:
@@ -177,6 +175,8 @@ Use this scope structure, from outermost to innermost:
 1. The block's captured caller environment.
 2. A scope containing the exports opened from `std::assemblies`.
 3. The assembly's body scope, containing injected input components and declarations made directly in the body.
+
+Do not automatically open `std::solver`. That's done for sketch blocks only. `assembly()` will work similarly, but open `std::assemblies` instead so that everything exported in `std::assemblies` is available to code in the block when it's executed.
 
 This gives assembly-module exports their normal opened-module precedence over outer captured names. Body-local declarations can shadow names in outer scopes. An injected input component and a body declaration with the same name are in the same scope, so ordinary duplicate-definition rules apply.
 
