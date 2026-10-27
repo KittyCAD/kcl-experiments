@@ -438,8 +438,8 @@ The relevant implementation is in `rust/kcl-lib`.
 | Concern | Existing integration points |
 | --- | --- |
 | Parsing and AST | `src/parsing/parser.rs`, including `fn_call_or_sketch_block`; `CallExpressionKw`, `SketchBlock`, and `Block` in `src/parsing/ast/types/mod.rs`. |
-| Call evaluation | `Node<CallExpressionKw>::execute`, argument handling, and `FunctionSource::call_setup`. |
-| Evaluators | `src/execution/exec_ast.rs` and `src/execution/machine.rs`. |
+| Call evaluation | Argument handling in `src/execution/fn_call.rs` and `FunctionSource::call_setup`. |
+| Executor | `src/execution/machine.rs`. |
 | Lexical capture | Existing `EnvironmentRef`, environment snapshots/epochs, and `push_new_env_for_call` behavior. |
 | Opened module scope | Existing module-export loading; `load_sketch2_into_current_scope` is a reference for opening exports, not a template for assembly execution mode. |
 | Standard library | `std/prelude.kcl`, `std/types.kcl`, and registration in `src/std/mod.rs`. |
@@ -561,7 +561,7 @@ Integrate with existing consumed-solid and consumed-region behavior without repl
 
 ### 4.6 Assembly lifecycle
 
-Implement the same lifecycle for both evaluators:
+Implement the assembly lifecycle as follows:
 
 1. Verify the feature gate and validate ordinary arguments.
 2. Substitute an empty components object and empty block where omitted.
@@ -582,17 +582,13 @@ Centralize cleanup so every error or early exit unwinds the same context correct
 
 Keep the output-validation stage separate from the transfer-commit stage so a duplicate or invalid output does not partially finalize the returned hierarchy.
 
-### 4.7 Recursive and machine evaluators
+### 4.7 Executor integration
 
-Implement feature parity in both the recursive evaluator and the stack-machine evaluator.
+The executor must use its existing continuation/resumable-standard-library mechanism for assembly body execution and finalization. Keep block execution on the CESK machine's existing run loop; do not start an independent nested CESK machine or synchronously recurse through arbitrary nested block calls. Nested block execution must not grow the native stack.
 
-The recursive evaluator can use the shared block executor within its existing recursion constraints.
+The executor must retain the assembly builder and pending finalization state across suspension. Restore them correctly after normal completion, error, or exit.
 
-The machine evaluator must use its existing continuation/resumable-standard-library mechanism for assembly body execution and finalization. Do not start an independent nested machine or synchronously recurse through arbitrary nested block calls in a way that defeats the machine's bounded native stack.
-
-The machine must retain the assembly builder and pending finalization state across suspension. Restore them correctly after normal completion, error, or exit.
-
-Both backends must agree on:
+Preserve the specified execution semantics:
 
 - Argument evaluation and capture order.
 - Member names and values.
@@ -648,7 +644,7 @@ Add language and standard-library documentation, including examples and diagnost
 
 ### 5.1 Acceptance scenarios
 
-Run language-level scenarios against both the recursive and machine backends. Add engine-backed coverage where real geometry identity, command admission, or derived-reference behavior matters.
+Run language-level scenarios against the executor. Add engine-backed coverage where real geometry identity, command admission, or derived-reference behavior matters.
 
 | Area | Required scenarios |
 | --- | --- |
@@ -681,7 +677,7 @@ Run language-level scenarios against both the recursive and machine backends. Ad
 | Engine commands | Ordinary commands still execute; finalization sends no new message and adds no mandatory flush; legitimate pending construction commands can flush after finalization. |
 | Failure and caching | Setup, body, and finalization errors unwind correctly; failures are not cached as success; stale generations and version changes cannot revive handles. |
 | Tooling and views | Formatting, comments, node paths, hover/signatures, highlighting, generated bindings, and value views handle new variants without serializing private environments or ownership fields. |
-| Deep execution | The machine evaluator handles deep nesting through continuations and cleans up state without introducing unbounded native recursion. |
+| Deep execution | The CESK machine handles deep nesting through continuations and cleans up state without growing the native stack per nesting level. |
 
 Use test-only module fixtures to exercise opening future `std::assemblies` exports and collision behavior while keeping the production module empty.
 
@@ -696,7 +692,7 @@ Implement in these dependency-ordered units:
 1. **General blocks:** version-aware parsing, optional AST field, lexical capture and forwarding, the `Block` type, generic evaluation support, traversal, and formatting.
 2. **Opaque assembly values:** `Assembly` and `Component`, runtime type integration, member access, views, and generated bindings.
 3. **Ownership rules:** provenance, generation validation, transfers, descendant invalidation, external-geometry admission, consumption integration, and duplicate helpers.
-4. **Assembly standard library:** the declaration, empty `std::assemblies` module, shared lifecycle, recursive and machine support, and no-op engine hook.
+4. **Assembly standard library:** the declaration, empty `std::assemblies` module, shared lifecycle, executor integration, and no-op engine hook.
 5. **Component operations:** narrow read-only adapters, solid-component cloning, and protection of derived references.
 6. **Integration and compatibility:** nested sketch behavior, caching, documentation, tooling, and regression coverage.
 
@@ -709,7 +705,7 @@ During implementation:
 - Format Rust using `cargo +nightly fmt`.
 - Run `cargo clippy --all-targets`.
 - Run focused KCL parser, execution, standard-library, ownership, and tooling tests.
-- Exercise the feature tests with both `KCL_EXECUTOR=recursive` and `KCL_EXECUTOR=machine`, using the repository's existing test commands.
+- Exercise the feature tests using the repository's existing test commands.
 - Run relevant engine-backed simulation tests where credentials and infrastructure are available.
 - Regenerate bindings with `npm run bindings:update` when the Rust interfaces change.
 - Build the required WASM artifacts before testing application integration that depends on them.
@@ -747,4 +743,4 @@ Leave three explicit future-work TODOs at the corresponding implementation point
 2. Implement cloning of assemblies and assembly-backed components.
 3. Accumulate future mating constraints and send the new engine message from the finalization hook once the engine API is available.
 
-The feature is complete when these semantics work in both evaluators, the finalization placeholder runs before a successful return without sending a new engine message, and earlier KCL versions retain their existing behavior.
+The feature is complete when these semantics work in the executor, the finalization placeholder runs before a successful return without sending a new engine message, and earlier KCL versions retain their existing behavior.
