@@ -102,6 +102,8 @@ A trailing block adds no parameters or parameter-declaration syntax. Its free na
 
 Only `assembly` supplies an empty block when the caller omits `block`. Other functions keep the usual rules for required and optional parameters.
 
+Do not change the semantics of `return` in sketch blocks.
+
 Add a TODO to revisit `return` semantics in trailing blocks. Do not give it nonlocal-return semantics in this implementation.
 
 ### 2.2 Assembly function
@@ -109,7 +111,7 @@ Add a TODO to revisit `return` semantics in trailing blocks. Do not give it nonl
 Declare the function in the standard-library prelude using the repository's conventions for Rust-implemented functions:
 
 ```kcl
-@(impl = std_rust, added_in = "4.0", feature_tree = false)
+@(impl = std_rust, added_in = "4.0", feature_tree = true)
 export fn assembly(
   components?: {},
   block?: Block,
