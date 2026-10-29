@@ -12,13 +12,13 @@ result = assembly() {
 }
 ```
 
-A call to `assembly` evaluates its arguments, opens the exports of `std::assemblies` in a new scope, and executes the supplied block there. It returns an opaque `Assembly` with named members. Solids and nested assemblies in those members become opaque `Component` values. Other values remain ordinary members.
+A call to `assembly` evaluates its arguments, opens the exports of `std::assemblies` in a new scope, and executes the supplied block there. Injected inputs retain their original `Solid` or `Assembly` type during block execution. The call recursively wraps solids and nested assemblies in its named members as opaque `Component` values only during successful finalization, before returning the opaque `Assembly`. Other values remain ordinary members.
 
 The implementation adds three opaque KCL types and matching `KclValue` variants:
 
 - `Block`: deferred KCL code with its captured lexical environment.
 - `Assembly`: a collection of named members with assembly identity and ownership.
-- `Component`: a solid or nested assembly owned by an assembly.
+- `Component`: a read-only wrapper for a solid or nested assembly in a finalized assembly.
 
 Define all three KCL types in `rust/kcl-lib/std/types.kcl`. Name the module `std::assemblies` to avoid a collision with `assembly`. It must initially export no functions. Assembly blocks must automatically see any KCL functions the module exports in the future.
 
@@ -130,7 +130,7 @@ Use these defaults for `assembly`:
 
 Use ordinary KCL call syntax and existing optional-argument conventions. Do not add special positional arguments for assemblies.
 
-Each property of `components` must be a raw `Solid` or an `Assembly`. Reject other values, including a `Component`, a sketch, an array, or an arbitrary nested object. The object maps names directly to values that can be transferred.
+Each property of `components` must be a raw `Solid` or an `Assembly`. Reject other values, including a `Component`, a sketch, an array, or an arbitrary nested object. The object maps names directly to transferable values that keep their input types during body execution.
 
 For example:
 
@@ -176,13 +176,15 @@ Use this scope structure, from outermost to innermost:
 
 1. The block's captured caller environment.
 2. A scope containing the exports opened from `std::assemblies`.
-3. The assembly's body scope, containing injected input components and declarations made directly in the body.
+3. The assembly's body scope, containing injected input values and declarations made directly in the body.
 
 Open `std::assemblies` when executing the block. Only sketch blocks automatically open `std::solver`.
 
 This gives `std::assemblies` exports the usual opened-module precedence over captured outer names. Body declarations can shadow outer names. Injected inputs and direct body declarations share a scope, so duplicate-definition rules apply.
 
-Move and inject each input before executing the first body statement. Its property name becomes its local name. Its value is immediately a `Component`, even if the input was a raw `Solid`.
+Move and inject each input before executing the first body statement. Its property name becomes its local name. A raw `Solid` remains a `Solid`, and an `Assembly` remains an `Assembly`. An injected solid supports ordinary solid operations during construction. An injected assembly retains its already finalized members, including their existing component protection.
+
+Wrap solids and nested assemblies only when finalizing the returned member hierarchy, after block execution and before `assembly()` returns an `Assembly`.
 
 The returned assembly contains:
 
@@ -200,18 +202,18 @@ Keep existing import restrictions, including top-level-only imports. An assembly
 
 Collect member names from direct body declarations and input properties. Keep them even if the geometry is consumed or no longer live, or the block never uses the value. This preserves the name set for future static analysis.
 
-Recursively finalize member values:
+At finalization, recursively convert member values:
 
-| Value | Value exposed through the assembly |
+| Value during construction | Value exposed through the returned assembly |
 | --- | --- |
 | `Solid` | A `Component` targeting that solid, preserving its live or consumed state. |
 | `Assembly` | A `Component` targeting that nested assembly. |
-| `Component` | A component with validated ownership and identity. |
+| `Component` | The existing component with validated ownership and identity, without an additional wrapper. |
 | Object | An object with the same keys and recursively finalized values. |
 | Array | An array with recursively finalized elements. |
 | Any other value | The ordinary value, retaining its existing behavior. |
 
-When conversion changes a homogeneous array's elements from `Solid` or `Assembly` to `Component`, update its element-type descriptor too.
+Keep an array's original element-type descriptor during block execution. When finalization changes a homogeneous array's elements from `Solid` or `Assembly` to `Component`, update its element-type descriptor too.
 
 A declaration of `count = 2` exposes a number at `result.count`. A declaration of `pair = { left = makeBody(), right = makeBody() }` exposes components at `result.pair.left` and `result.pair.right`.
 
@@ -238,7 +240,9 @@ Components are read-only:
 - Reject appearance changes or other engine operations that modify the existing body.
 - Reject merge or similar construction modes that would modify a component body through a face, edge, sketch, or other derived reference.
 
-Do not make `Component` a general subtype of `Solid`, and do not globally unwrap it during coercion. A user-defined parameter typed `Solid` continues to reject a component.
+Injected raw solids and locally created raw solids remain mutable and consumable until finalization wraps them as components. Moving an existing assembly into a block preserves the read-only protection of its existing components.
+
+Do not make `Component` a general subtype of `Solid`, and do not globally unwrap it during coercion. A user-defined parameter typed `Solid` continues to reject a component. It accepts an injected raw `Solid` during construction.
 
 Non-solid geometry, such as an exported sketch, keeps its normal modeling behavior. Exporting it adds no read-only restriction. It still cannot bypass protection of a component's body.
 
@@ -262,15 +266,21 @@ fn makeCylinder(): Solid {
   )
 }
 
+fn copyBody(body: Solid): Solid {
+  return clone(body)
+}
+
 seed = makeCylinder()
 
 machine = assembly(components = { first = seed }) {
   label = "Two cylinders"
-  second = makeCylinder()
+  second = copyBody(body = first)
 }
 
 independentCopy = clone(machine.first)
 ```
+
+During the block, `first` is a raw `Solid`, so it can be passed to `copyBody`'s `Solid` parameter. The helper returns an independent raw `Solid` for `second`. Both values become components only during finalization.
 
 After the call:
 
@@ -293,11 +303,11 @@ Preflight validation must confirm that:
 4. An input assembly contains no consumed geometry in its public member hierarchy.
 5. No live body or assembly identity occurs more than once across the inputs.
 
-Once preflight passes, move the inputs into the new assembly and inject their component handles. Do not clone geometry or send an engine command to perform this logical move.
+Once preflight passes, move the inputs to the new assembly's construction owner and inject new valid handles with the same `Solid` or `Assembly` types as the inputs. This transfer changes ownership and handle validity while preserving the value's type. Defer component wrapping until finalization. Do not clone geometry or send an engine command to perform this logical move.
 
 A move invalidates the original value and every alias of its old ownership handle before the body executes. Captured aliases become invalid too.
 
-Moving a whole assembly also invalidates previously saved handles to its descendants. Reissue valid handles under the new assembly hierarchy.
+Moving a whole assembly also invalidates previously saved handles to its descendants. Reissue valid handles under the new assembly hierarchy. The injected value remains an `Assembly`, and its existing component members remain read-only.
 
 For example:
 
@@ -341,25 +351,25 @@ Assign module provenance during module initialization, even if an assembly is ac
 
 Apply the same rules in mock execution and engine-backed execution.
 
-### 3.3 Local geometry and final transfer
+### 3.3 Construction values and final transfer
 
-Raw solids created during block execution remain mutable throughout construction. The block may transform, combine, or consume them with existing modeling operations.
+Injected raw solids and raw solids created during block execution remain `Solid` values and stay mutable throughout construction. The block may transform, combine, or consume them with existing modeling operations. Injected and locally created nested assemblies remain `Assembly` values during construction; their existing components stay read-only.
 
-On successful finalization, transfer locally created geometry in the returned member hierarchy into the assembly and expose it through components.
+On successful finalization, transfer injected and locally created live solids and nested assemblies in the returned member hierarchy into their final ownership positions and expose them through components. Apply recursive wrapping only after body execution and before returning the `Assembly`. Preserve consumed members as described in section 3.4.
 
-Invalidate old raw handles to transferred geometry, including aliases in closures or other escaped values. Do not rewrite captured lexical environments to point at the new component handles.
+Invalidate construction-time handles to transferred solids and nested assemblies, including aliases in closures or other escaped values. A nested assembly transfer also invalidates saved descendant handles. Do not rewrite captured lexical environments to point at the new component handles.
 
 A closure that captured a scalar continues to work. A closure that later tries to use a raw solid handle invalidated by finalization receives the normal moved-handle error.
 
 Non-solid exported geometry retains ordinary modeling behavior, subject to ownership validity and the rule against indirectly modifying a component body.
 
-### 3.4 Consumed locals remain members
+### 3.4 Consumed inputs and locals remain members
 
 Do not drop consumed named bodies from the result.
 
-For example, a block that declares `left` and `right`, consumes them in a union, and binds the result as `joined` still returns all three names as assembly members.
+For example, a block that consumes raw solids `left` and `right` in a union and binds the result as `joined` still returns all three names as assembly members. This applies whether `left` and `right` were injected inputs or declared directly in the body.
 
-The `left` and `right` components retain the consumed state of their original values. Attempts to use them as geometry fail. Wrapping a consumed value must not make it live or assign it a new live identity.
+At finalization, `left` and `right` become components that retain the consumed state of their original values. Attempts to use them as geometry fail. Wrapping a consumed value must not make it live or assign it a new live identity.
 
 Ignore consumed values when checking for duplicate live bodies. Retaining a consumed input alongside its live result does not create a duplicate by itself.
 
@@ -381,7 +391,7 @@ Examples include:
 - Two input properties containing aliases of the same solid.
 - A direct solid input and a nested assembly input containing that same live body.
 - Two body-local names pointing at the same live solid.
-- A body-local alias of an injected component, when both names would appear in the output.
+- A body-local alias of an injected solid or assembly, when both names would appear in the output.
 - Duplicate live geometry buried in separate object properties or array elements.
 
 Independent clones have distinct bodies and are valid.
@@ -503,6 +513,8 @@ Add runtime representations that store this information:
 | `Assembly` | Internal assembly identity, ownership/generation information, named member map, and normal metadata. |
 | `Component` | Component handle identity/generation, owning assembly, a target that is either a `Solid` or an `Assembly`, and normal metadata. |
 
+The assembly builder must retain each input's original `Solid` or `Assembly` type in its body-scope bindings. Create new component wrappers only during finalization of the returned member hierarchy. Nested assemblies may already contain components from their own finalization.
+
 Use shared ownership where needed to keep captured environments and nested assemblies alive. Do not copy a large AST each time a block is forwarded.
 
 Add matching `KclValue` variants and runtime type cases. Update all exhaustive matches and consumers for type reporting, coercion errors, metadata and source extraction, environment remapping, serialization views, operation recording, solver-value substitution, and recursive value walking.
@@ -547,6 +559,8 @@ Track:
 
 A copied alias retains the same access token or generation. A transfer issues valid handles for the new owner and invalidates the old generation. Transferring an assembly must invalidate saved descendant handles as well as the outer handle.
 
+Track ownership separately from component protection. Moving a raw solid into the construction owner preserves its type and mutability. Finalization protects the body when wrapping it as a component. Moving an existing assembly preserves the protection of its already finalized components.
+
 Register provenance when trusted code creates geometry. Do not assign local ownership just because the executor encounters a value for the first time. That could misclassify external geometry as local.
 
 Assign geometry that a helper creates during assembly construction to the active assembly construction owner. Use module provenance for module initialization. Each nested assembly has its own ownership boundary.
@@ -570,13 +584,13 @@ Implement the assembly lifecycle as follows:
 3. Preflight all input types, handle validity, consumed descendants, and duplicate identities.
 4. Allocate an internal assembly identity; do not allocate an engine object.
 5. Prepare the captured lexical context and the scope opened from `std::assemblies`.
-6. Transfer inputs and bind their component values into the body scope.
+6. Transfer inputs to the construction owner and bind new valid handles with their original `Solid` or `Assembly` types into the body scope.
 7. Establish the assembly construction ownership boundary.
 8. Execute the block.
 9. Collect injected input names and directly declared body-local value names.
-10. Prepare recursive conversion of solids and assemblies to components. Keep consumed members.
+10. Prepare recursive finalization of the collected values, planning component wrappers for solids and nested assemblies from both inputs and body declarations. Keep consumed members.
 11. Validate the complete output for duplicate live identities and unauthorized external geometry.
-12. Commit transfers of locally produced live solids and nested assemblies to the returned hierarchy.
+12. Commit final ownership transfers for injected and locally produced live solids and nested assemblies, create the prepared component wrappers, and update affected array element-type descriptors.
 13. Invoke the no-op engine finalization hook.
 14. Restore the surrounding execution context and return the `Assembly`.
 
@@ -593,7 +607,7 @@ Retain the assembly builder and pending finalization state across suspension. Re
 Preserve:
 
 - Argument evaluation and capture order.
-- Member names and values.
+- Member names and values, including original input types during construction and component wrapping only at finalization.
 - Ownership and identity behavior.
 - Engine command and operation ordering.
 - Validation and failure timing.
@@ -602,6 +616,8 @@ Preserve:
 ### 4.8 Native operations and component adapters
 
 Do not add a general `Component -> Solid` conversion. Give supported native operations an explicit, narrow input policy, such as read-only solid access or solid cloning.
+
+Injected raw solids use existing solid signatures and operations during construction. Component adapters apply to existing components in nested assemblies and to component values exposed by finalized results.
 
 Initial integration includes:
 
@@ -634,6 +650,8 @@ Extend value views and operation-value representations:
 - `Assembly`: a view of its named public members.
 - `Component`: its target kind and inspectable value, without exposing mutable raw-handle access or private ownership state.
 
+During construction, value views must retain each injected value's `Solid` or `Assembly` type.
+
 Update all generated union consumers to handle the new variants. Keep ordinary solid operations and their existing engine/artifact behavior. Do not create a new engine scene or artifact kind for an assembly.
 
 Keep ownership and provenance state consistent with runtime memory across caching and resumption. Store the registry with the relevant runtime state or invalidate incompatible cached state. Discarding bookkeeping must never make a stale cached handle valid.
@@ -658,25 +676,27 @@ Run language-level scenarios against the executor. Add engine-backed tests where
 | Deferred behavior | Ignored block never executes; stored and returned blocks retain lexical capture; repeated execution creates fresh local bindings. |
 | Return and exits | Direct block return is rejected; nested function return works; errors and exits restore state and skip the success hook. |
 | Defaults | Empty `assembly()`, components-only calls, block-only calls, and explicit block forwarding; other functions receive no implicit empty block. |
-| Scope | Module export precedence, injected component names, same-scope duplicate definitions, local shadowing of outer names, and no captured/module/helper-local leakage into members. |
-| Result membership | Numbers, strings, functions, sketches, objects, arrays, raw solids, nested assemblies, and consumed values retain their declared names; recursive conversion updates array typing. |
+| Scope | Module export precedence, injected input names, same-scope duplicate definitions, local shadowing of outer names, and no captured/module/helper-local leakage into members. |
+| Result membership | Numbers, strings, functions, sketches, objects, arrays, raw solids, nested assemblies, and consumed values retain their declared names; recursive conversion updates array typing only at finalization. |
 | Input validation | Reject unsupported property types and components passed as inputs; validate the complete object before any move or body side effect. |
-| Input movement | The old solid and all aliases are invalid before the first body statement; injected values are components immediately. |
+| Input movement | Old input handles and all aliases are invalid before the first body statement; injected values have new valid handles with their original `Solid` or `Assembly` types. |
+| Construction types | Injected solids satisfy `Solid` parameters and support normal transforms, combinations, and consumption; injected assemblies satisfy `Assembly` parameters and retain protected component members. |
+| Finalization | Both injected and locally created solids and nested assemblies become components only at successful finalization, after body execution and before returning; construction-time handles captured in closures become invalid. |
 | Descendant movement | Moving an assembly invalidates a previously saved child handle; the new hierarchy remains usable; copied scalar metadata remains valid. |
 | Consumed input assemblies | Moving an assembly with consumed geometry is rejected with the member path. |
 | External captures | Reject direct, aliased, imported, container-held, and helper-accessed external geometry; allow fresh helper-created geometry. |
 | Module provenance | Lazy top-level module geometry remains external; imported factory-created geometry belongs to the active construction. |
 | Mixed objects | Allow a scalar projection from an object that also contains external geometry; reject the geometry projection or whole-container use. |
 | Component inspection | Permit supported solid queries and member access without exposing a mutable raw solid. |
-| Component protection | Reject mutators, transforms, consuming operations, casts that would unwrap a solid, and indirect mutation through derived faces, edges, sketches, or merge operations. |
+| Component protection | After wrapping, reject mutators, transforms, consuming operations, casts that would unwrap a solid, and indirect mutation through derived faces, edges, sketches, or merge operations; existing components inside injected assemblies stay protected throughout construction. |
 | Independent construction | Allow construction of new independent geometry using permitted references to a component. |
 | Clone | Cloning a solid component yields an independent mutable solid; preserve collection behavior; reject assembly cloning. |
 | Other geometry | Exported non-solid geometry keeps ordinary modeling behavior and cannot bypass component protection. |
-| Duplicate inputs and outputs | Reject direct aliases, nested-object/array duplicates, cross-subassembly duplicates, and repeated assembly identity; allow independent clones. |
-| Consumed members | Preserve consumed names; fail when used as live geometry; ignore them only for duplicate-live-body checks. |
+| Duplicate inputs and outputs | Reject direct aliases, body-local aliases of injected solids or assemblies, nested-object/array duplicates, cross-subassembly duplicates, and repeated assembly identity; allow independent clones. |
+| Consumed members | When the block consumes injected or locally created solids, retain their names as consumed components; fail when used as live geometry and ignore them only for duplicate-live-body checks. |
 | Nesting | Nested assemblies, assemblies in sketches, and sketches in assemblies work under existing restrictions; an assembly does not bypass active nested-sketch checks. |
 | Sketch replay | No new engine permissions, frontend mode, or cache behavior; solver substitution traverses new value containers. |
-| Engine commands | Ordinary commands still execute; finalization sends no new message and adds no mandatory flush; legitimate pending construction commands can flush after finalization. |
+| Engine commands | Ordinary commands still execute; finalization sends no new message and adds no mandatory flush; legitimate pending construction commands on injected or locally created solids can flush after finalization. |
 | Failure and caching | Setup, body, and finalization errors unwind correctly; failures are not cached as success; stale generations and version changes cannot revive handles. |
 | Tooling and views | Formatting, comments, node paths, hover/signatures, highlighting, generated bindings, and value views handle new variants without serializing private environments or ownership fields. |
 | Deep execution | The CESK machine handles deep nesting through continuations and cleans up state without growing the native stack per nesting level. |
@@ -694,7 +714,7 @@ Implement these units in dependency order:
 1. Add general blocks, including version-aware parsing, the optional AST field, lexical capture and forwarding, the `Block` type, generic evaluation support, traversal, and formatting.
 2. Add opaque `Assembly` and `Component` values, with runtime type integration, member access, views, and generated bindings.
 3. Implement ownership rules for provenance, generation validation, transfers, descendant invalidation, external-geometry checks, consumption integration, and helpers for duplicate detection.
-4. Add assembly standard-library support with the declaration, empty `std::assemblies` module, shared lifecycle, executor integration, and no-op engine hook.
+4. Add assembly standard-library support with the declaration, empty `std::assemblies` module, shared lifecycle that preserves input types and defers component wrapping to finalization, executor integration, and no-op engine hook.
 5. Add narrow read-only component adapters, solid-component cloning, and protection for derived references.
 6. Finish integration and compatibility work for nested sketch behavior, caching, documentation, tooling, and regression coverage.
 
@@ -729,10 +749,12 @@ These decisions are settled for this implementation:
 - Existing `SketchBlock` AST nodes remain separate.
 - Assembly members are accessed with ordinary dot syntax.
 - Every injected input and directly declared body-local value becomes a member.
-- Objects and arrays are recursively converted where they contain solids or assemblies.
+- Injected inputs retain their original `Solid` or `Assembly` types during block execution; raw solids remain mutable and consumable during construction.
+- Solids and nested assemblies become components only during finalization, before returning the `Assembly`.
+- Objects and arrays are recursively converted during finalization where they contain solids or assemblies; affected array element-type descriptors are updated then.
 - Consumption does not remove member names.
 - Live-body duplication and repeated assembly identity are errors, with deterministic member paths.
-- Components are read-only; other exported geometry retains normal modeling behavior.
+- Components are read-only, including existing components inside injected assemblies; other exported geometry retains normal modeling behavior.
 - A whole-assembly move invalidates saved descendant handles.
 - Captured environments are not rewritten after ownership transfers.
 - Imports remain subject to the existing top-level-only rule.
