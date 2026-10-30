@@ -408,7 +408,7 @@ Duplicate diagnostics should report both conflicting public paths in determinist
 
 Run body code through the existing engine command path. Keep normal batching and command order. An assembly adds no restriction on engine commands.
 
-After successful evaluation, member preparation, validation, and ownership finalization, invoke a no-op assembly finalization hook before returning the `Assembly`.
+After successful evaluation, member preparation, and output validation, invoke the no-op engine finalization hook. Run it before final ownership transfers and component wrapping.
 
 Add a TODO at this hook for the future engine message. Future assembly functions may collect mating constraints during the block and send that information once at the end. Do not add constraint accumulation, a placeholder wire schema, or a fake engine command in this implementation.
 
@@ -419,7 +419,7 @@ If argument validation, body evaluation, ownership validation, or finalization f
 - Return the appropriate existing execution error or exit condition.
 - Restore lexical scopes, source context, and the active assembly ownership boundary.
 - Do not return a partially constructed assembly.
-- Do not call the successful-finalization hook.
+- Skip the engine finalization hook if an earlier phase fails.
 - Do not cache the failed evaluation as a successful result.
 
 Keep existing execution failure semantics. Do not add transactional rollback for engine commands or ownership transfers completed before a later failure.
@@ -590,8 +590,8 @@ Implement the assembly lifecycle as follows:
 9. Collect injected input names and directly declared body-local value names.
 10. Prepare recursive finalization of the collected values, planning component wrappers for solids and nested assemblies from both inputs and body declarations. Keep consumed members.
 11. Validate the complete output for duplicate live identities and unauthorized external geometry.
-12. Commit final ownership transfers for injected and locally produced live solids and nested assemblies, create the prepared component wrappers, and update affected array element-type descriptors.
-13. Invoke the no-op engine finalization hook.
+12. Invoke the no-op engine finalization hook. Future engine messages in this hook may translate or rotate subassemblies and bodies, so it must run before wrapping them in read-only `Component` values.
+13. Commit final ownership transfers for injected and locally produced live solids and nested assemblies, create the prepared component wrappers, and update affected array element-type descriptors.
 14. Restore the surrounding execution context and return the `Assembly`.
 
 Centralize cleanup so every error or early exit restores the same context. Complete all input preflight checks before the first move.
@@ -674,14 +674,14 @@ Run language-level scenarios against the executor. Add engine-backed tests where
 | Generic block syntax | Empty and nonempty blocks; comments; multiline calls; qualified calls; function aliases; calls in pipelines; parenthesized condition calls; source ranges and recast round trips. |
 | Argument binding | Fixed `block` parameter, explicit forwarding, duplicate explicit-plus-trailing block, wrong block type, and a callee that does not accept the argument. |
 | Deferred behavior | Ignored block never executes; stored and returned blocks retain lexical capture; repeated execution creates fresh local bindings. |
-| Return and exits | Direct block return is rejected; nested function return works; errors and exits restore state and skip the success hook. |
+| Return and exits | Direct block return is rejected; nested function return works; body errors and exits restore state and skip the engine finalization hook. |
 | Defaults | Empty `assembly()`, components-only calls, block-only calls, and explicit block forwarding; other functions receive no implicit empty block. |
 | Scope | Module export precedence, injected input names, same-scope duplicate definitions, local shadowing of outer names, and no captured/module/helper-local leakage into members. |
 | Result membership | Numbers, strings, functions, sketches, objects, arrays, raw solids, nested assemblies, and consumed values retain their declared names; recursive conversion updates array typing only at finalization. |
 | Input validation | Reject unsupported property types and components passed as inputs; validate the complete object before any move or body side effect. |
 | Input movement | Old input handles and all aliases are invalid before the first body statement; injected values have new valid handles with their original `Solid` or `Assembly` types. |
 | Construction types | Injected solids satisfy `Solid` parameters and support normal transforms, combinations, and consumption; injected assemblies satisfy `Assembly` parameters and retain protected component members. |
-| Finalization | Both injected and locally created solids and nested assemblies become components only at successful finalization, after body execution and before returning; construction-time handles captured in closures become invalid. |
+| Finalization | Run the engine finalization hook after output validation and before final ownership transfers and wrapping. Both injected and locally created solids and nested assemblies become components only then, before returning; construction-time handles captured in closures become invalid. |
 | Descendant movement | Moving an assembly invalidates a previously saved child handle; the new hierarchy remains usable; copied scalar metadata remains valid. |
 | Consumed input assemblies | Moving an assembly with consumed geometry is rejected with the member path. |
 | External captures | Reject direct, aliased, imported, container-held, and helper-accessed external geometry; allow fresh helper-created geometry. |
@@ -767,4 +767,4 @@ Leave TODOs at these implementation points:
 2. Implement cloning of assemblies and assembly-backed components.
 3. Accumulate future mating constraints and send the new engine message from the finalization hook once the engine API is available.
 
-The feature is complete when the executor implements these semantics and earlier KCL versions retain their behavior. The finalization hook must run before a successful return without sending a new engine message.
+The feature is complete when the executor implements these semantics and earlier KCL versions retain their behavior. The finalization hook must run after output validation and before final ownership transfers and component wrapping, without sending a new engine message.
