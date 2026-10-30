@@ -654,7 +654,7 @@ During construction, value views must retain each injected value's `Solid` or `A
 
 Update all generated union consumers to handle the new variants. Keep ordinary solid operations and their existing engine/artifact behavior. Do not create a new engine scene or artifact kind for an assembly.
 
-Keep ownership and provenance state consistent with runtime memory across caching and resumption. Store the registry with the relevant runtime state or invalidate incompatible cached state. Discarding bookkeeping must never make a stale cached handle valid.
+Keep component protection, ownership, and provenance state consistent with runtime memory across caching and resumption. Store this bookkeeping with the relevant runtime state or invalidate incompatible cached state. Discarding it must never remove component protection or make a stale cached handle valid.
 
 Preserve existing sketch cache behavior and ensure recursive solver-value substitution handles new value containers. Prevent ownership state or new-version values from leaking into earlier-version executions.
 
@@ -689,6 +689,7 @@ Run language-level scenarios against the executor. Add engine-backed tests where
 | Mixed objects | Allow a scalar projection from an object that also contains external geometry; reject the geometry projection or whole-container use. |
 | Component inspection | Permit supported solid queries and member access without exposing a mutable raw solid. |
 | Component protection | After wrapping, reject mutators, transforms, consuming operations, casts that would unwrap a solid, and indirect mutation through derived faces, edges, sketches, or merge operations; existing components inside injected assemblies stay protected throughout construction. |
+| Protection before move invalidation | Raw aliases retained after wrapping cannot mutate or consume a component's body; derived references and cached values retain the same protection. |
 | Independent construction | Allow construction of new independent geometry using permitted references to a component. |
 | Clone | Cloning a solid component yields an independent mutable solid; preserve collection behavior; reject assembly cloning. |
 | Other geometry | Exported non-solid geometry keeps ordinary modeling behavior and cannot bypass component protection. |
@@ -709,14 +710,16 @@ Every new feature example and fixture must opt into `4.0-preview`. Use earlier-v
 
 ### 5.2 Suggested implementation units
 
-Implement these units in dependency order:
+Build the `4.0-preview` prototype through unit 4 before implementing the full ownership registry and validation:
 
 1. Add general blocks, including version-aware parsing, the optional AST field, lexical capture and forwarding, the `Block` type, generic evaluation support, traversal, and formatting.
 2. Add opaque `Assembly` and `Component` values, with runtime type integration, member access, views, and generated bindings.
-3. Implement ownership rules for provenance, generation validation, transfers, descendant invalidation, external-geometry checks, consumption integration, and helpers for duplicate detection.
-4. Add assembly standard-library support with the declaration, empty `std::assemblies` module, shared lifecycle that preserves input types and defers component wrapping to finalization, executor integration, and no-op engine hook.
-5. Add narrow read-only component adapters, solid-component cloning, and protection for derived references.
+3. Add assembly standard-library support with the declaration, empty `std::assemblies` module, shared lifecycle that preserves input types and defers component wrapping to finalization, executor integration, and no-op engine hook. Validate arguments and input types.
+4. Add narrow read-only component adapters, solid-component cloning, and mutation guards for raw aliases and derived references. Enforce protection independently of handle invalidation.
+5. Implement ownership rules for provenance, generation validation, transfers, descendant invalidation, external-geometry checks, consumption integration, and helpers for duplicate detection. Add preflight and output validation at the lifecycle points in section 4.6.
 6. Finish integration and compatibility work for nested sketch behavior, caching, documentation, tooling, and regression coverage.
+
+Add tests with each unit. Complete all units and the full acceptance matrix before stable `4.0`. During preview, programs accepted only because validation is missing remain outside the contract in sections 2 through 4 and may be rejected as checks are added. The goal is to get to a minimally-working implementation in fewer implementation steps, and then add checks necessary for 4.0 stabilization after that.
 
 Keep logically separate changes reviewable. Do not alter CI configuration to make the feature pass.
 
