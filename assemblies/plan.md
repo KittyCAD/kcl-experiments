@@ -130,7 +130,7 @@ Use these defaults for `assembly`:
 
 Use ordinary KCL call syntax and existing optional-argument conventions. Do not add special positional arguments for assemblies.
 
-Each property of `components` must be a raw `Solid` or an `Assembly`. Reject other values, including a `Component`, a sketch, an array, or an arbitrary nested object. The object maps names directly to transferable values that keep their input types during body execution.
+Each property of `components` must be a `Solid`, `Assembly`, or array of `Solid` or `Assembly`. Reject other values, including a `Component`, a sketch, an array of other values, or an arbitrary nested object. The object maps names directly to transferable values that keep their input types during body execution.
 
 For example:
 
