@@ -46,6 +46,8 @@ augmentedAssembly() {
 }
 ```
 
+A function call with a block argument cannot be called in an if-condition. The `{` would be ambiguous whether it's for the block argument or the then-part of the conditional. The workaround is to assign the result to a temporary variable and use that as the condition. Future work may add parsing of the block inside the call parentheses.
+
 Returning from a block with `return` is an error. This restriction may be lifted in the future.
 
 ## Drawbacks
@@ -126,6 +128,18 @@ In the future, we will add a way for KCL code to call a block in a module contex
 In the future, we may also want to add a way for a block to accept arguments. This is out of scope for now. We'll need a way for the block to declare its parameters. We may also need syntax for parameterized types so that the `Block` type can specify its parameter types.
 
 In the future, we may want to allow non-local control flow from within a block using `return`, `continue`, `break`, or other keywords. Similar to Ruby, this allows you to do things like implement for-each in the language, where `break` and `continue` work. It also allows you to refactor in such a way that early `return`s don't change their meaning since `return` can return from the enclosing function, not the block. This can only be added in a backward-compatible way if `return` is disallowed in the initial release.
+
+In the future, we may want to add the ability to call a function with a block argument inside the call parentheses to avoid parsing ambiguity with an if-then conditional. For example:
+
+```
+if foo(a, b, block = {
+  // block argument
+}) {
+  // then
+} else {
+  // ...
+}
+```
 
 In the future, we may want to allow syntax for passing multiple blocks to a function. This is great for if-then-else-style functions that have both a "then" and an "else" or event style callbacks like "on-success", "on-failure", "always", etc. For example:
 
