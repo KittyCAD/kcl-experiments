@@ -103,6 +103,22 @@ end
 
 IMO, we generally want to avoid too many sigils in KCL. I have no concrete evidence for this, but my claim is that too many sigils make code unapproachable. We already have `@` for the unlabeled parameter, and it's generally considered a mistake since it collides with annotations like `@settings()`. Adding a sigil would require parser changes. The sigil makes the parameter special. Considering the future possibilities, I generally don't want block parameters to be special, other than some syntactic sugar.
 
+## Prior Art
+
+A lot of the syntax design is based off of how Swift works. Swift doesn't have a special syntax for declaring block parameters. It goes based off the declared parameter type. It allows more than one block parameter. When calling it, the first block can be after the parentheses and unlabeled. This is bound to the first function parameter. Subsequent blocks must be labeled with the parameter name.
+
+For example, a function that accepts two function parameters, `onSuccess` and `onFailure`:
+
+```
+foo(a, b) {
+  // on success block
+} onFailure: {
+  // on failure block
+}
+```
+
+I already discussed how a lot of the semantics are based off of Ruby blocks.
+
 ## Future Possibilities
 
 In the future, we will add a way for KCL code to call a block in a module context. This is how we'll allow things like `sketch()` to be implemented, where the block is evaluated with the `std::solver` module opened (i.e. with exported items in scope of the code block). How exactly is left unspecified, but because `Block` is an opaque type, we should be able to define a function that does it.
