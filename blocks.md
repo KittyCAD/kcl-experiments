@@ -1,5 +1,23 @@
 # KCL Blocks
 
+## Summary
+
+Allow KCL functions to declare a block parameter. Callers can then call the function using a trailing block of code, which is syntax sugar for passing the block as the block argument. The block of code is like an anonymous module. How the block is used is determined by the declaring function, which can only be done in Rust for now.
+
+For example:
+
+```
+// Define a function in the standard library that accepts a block.
+@(impl = std_rust)
+fn littleLang(code: Block): number {}
+
+// Call the function, giving it a block argument.
+answer = littleLang() {
+  width = 10mm
+  height = 22mm
+}
+```
+
 ## Motivation
 
 We made a block syntax for sketch-solve. But it's super special. We'd like to generalize it so that it works with assemblies, CAM, drawings, and other future things with their own embedded DSL.
