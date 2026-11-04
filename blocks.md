@@ -125,6 +125,8 @@ I already discussed how a lot of the semantics are based off of Ruby blocks.
 
 In the future, we will add a way for KCL code to call a block in a module context. This is how we'll allow things like `sketch()` to be implemented, where the block is evaluated with the `std::solver` module opened (i.e. with exported items in scope of the code block). How exactly is left unspecified, but because `Block` is an opaque type, we should be able to define a function that does it.
 
+In the future, we could add a way for functions to control whether engine communication is allowed. `sketch()` disallows engine communication while executing its given block. It would be nice if arbitrary functions, or at least those defined in the standard library, could control this, without it being so special. Perhaps this could be done with an argument to whatever executes the block's code.
+
 In the future, we may also want to add a way for a block to accept arguments. This is out of scope for now. We'll need a way for the block to declare its parameters. We may also need syntax for parameterized types so that the `Block` type can specify its parameter types.
 
 In the future, we may want to allow non-local control flow from within a block using `return`, `continue`, `break`, or other keywords. Similar to Ruby, this allows you to do things like implement for-each in the language, where `break` and `continue` work. It also allows you to refactor in such a way that early `return`s don't change their meaning since `return` can return from the enclosing function, not the block. This can only be added in a backward-compatible way if `return` is disallowed in the initial release.
