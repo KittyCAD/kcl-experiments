@@ -74,6 +74,8 @@ Requiring a block parameter to have a declared type would be a departure from tr
 
 Making `return` in a block an error would be a breaking change for sketch blocks. We may need to special-case sketch blocks if this isn't added in a major KCL version. But this seems like it would be very rarely used.
 
+It's not currently possible to create a block value in an arbitrary expression context. We only parse it immediately after a call expression's parentheses. To allow multiple block parameters, it would be good to allow parsing it in an arbitrary expression. But `{}` is ambiguous with a KCL object/record. We don't want the parser to have arbitrary look-ahead. So to add this in the future, we'll need to add syntax to disambiguate it. This is out of scope. See the future possibilities section.
+
 ## Rationale and Alternatives
 
 My goal is to basically take what we did for sketch blocks, extract it, and generalize it, not invent a brand new thing.
@@ -142,6 +144,8 @@ I already discussed how a lot of the semantics are based off of Ruby blocks.
 ## Future Possibilities
 
 In the future, we will add a way for KCL code to call a block in a module context. This is how we'll allow things like `sketch()` to be implemented, where the block is evaluated with the `std::solver` module opened (i.e. with exported items in scope of the code block). How exactly is left unspecified, but because `Block` is an opaque type, we should be able to define a function that does it.
+
+In the future, it would be good to allow parsing it in an arbitrary expression. But `{}` is ambiguous whether it's a KCL object/record or a block. Ruby handles this by requiring `proc { }` for parsing a block expression and `{}` for an object. Rust uses `|` to begin a block expression, as in `|x| { }`. KCL uses `|` only in infix position for logical OR. I think either are possibilities.
 
 In the future, we could add a way for functions to control whether engine communication is allowed. `sketch()` disallows engine communication while executing its given block. It would be nice if arbitrary functions, or at least those defined in the standard library, could control this, without it being so special. Perhaps this could be done with an argument to whatever executes the block's code.
 
