@@ -67,7 +67,7 @@ This is why returning from a block with `return` is an error. Also, see future w
 Another notable property is that code blocks close over identifiers that they reference, similar to anonymous functions. But unlike functions, their scope can be overridden by executing it in the context of another module, the way sketch blocks are executed in the `std::solver` module. So identifier resolution lookup works in this order. Lookup continues down the list until the name is found.
 
 1. local bindings
-2. exported module bindings (e.g. `std::solver` exports in the case of sketch blocks)
+2. imported bindings from the opened module (e.g. `std::solver` exports in the case of sketch blocks)
 3. lexical parent scope bindings
 
 ### Alternative: Parameter Position
