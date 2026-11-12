@@ -1,10 +1,11 @@
 use std::{cell::OnceCell, collections::HashMap};
 
 fn main() {
-    let part = Part::new();
-    let part2 = Part::new(); // <-- the topology construction never runs because it is not used by a program target
-    let part3 = Part::new(); // <-- ditto
-    let mut assy = AssemblyDefinition::new("first assy", || {
+    // Parts take a function that lazily yields one or more Bodies.
+    let part = Part::new(|| Body::new());
+    let part2 = Part::new(|| Body::new()); // <-- this body construction never runs because it is not used by a program target
+    let part3 = Part::new(|| Body::new()); // <-- ditto
+    let assy = AssemblyDefinition::new("first assy", || {
         let instance = part.instance();
         let instance2 = part.instance();
 
@@ -24,11 +25,9 @@ fn main() {
         )
     });
 
-    let mut assy2 = AssemblyDefinition::new("second assy", || {
+    let assy2 = AssemblyDefinition::new("second assy", || {
         // make the components of this subassembly concrete (execute required part modeling & subassemblies)
         // so that we have the user "input" for instancing.
-        // in KCL this step should be implicit, and once first invoked anywhere should not need to be re-invoked later on in the program.
-        // The "input" is identical for all uses of an assembly definition in any context.
 
         // make a copy of the concrete subassembly and solve it with this pose
         let frozen_subassembly = assy.with_pose(|poses| &poses[0]).solved();
@@ -42,9 +41,10 @@ fn main() {
 
         // a Pose is intended to represent the transforms for influencing solve work not yet completed.
         // All components of subassemblies not yet solved might as well be, in solver & pose terms, direct components of this assembly.
-        // But in UI terms those components should still be identified as belonging to subassemblies.
-
+        // So the Pose data for unsolved Subassemblies is stored in the parent assembly Pose.
         let pose = Pose::new();
+        let other_pose = Pose::new();
+        let third_pose = Pose::new();
         AssemblyInput::new(
             vec![
                 moving_subassembly.into(),
@@ -53,7 +53,7 @@ fn main() {
             ],
             vec![anchor],
             vec![fastened],
-            vec![pose],
+            vec![pose, other_pose, third_pose],
         )
     });
 
@@ -138,37 +138,71 @@ impl InstanceId {
     }
 }
 
-#[derive(Clone)]
-struct Solid;
+#[derive(Clone, Copy, Debug)]
+struct BodyId(uuid::Uuid);
 
-struct Part {
-    part_id: PartId,
-    body: Solid,
+impl BodyId {
+    fn new() -> Self {
+        Self(uuid::Uuid::new_v4())
+    }
 }
 
-impl Part {
+#[derive(Clone)]
+struct Body {
+    id: BodyId,
+}
+
+impl Body {
     fn new() -> Self {
+        Self { id: BodyId::new() }
+    }
+}
+
+struct Part<Constructor: Fn() -> Body> {
+    part_id: PartId,
+    constructor: Constructor,
+    body: OnceCell<Body>,
+}
+
+impl<Constructor: Fn() -> Body> Part<Constructor> {
+    fn new(constructor: Constructor) -> Self {
         Self {
             part_id: PartId::new(),
-            body: Solid,
+            constructor,
+            body: OnceCell::new(),
         }
     }
 
     fn instance(&self) -> PartInstance {
+        // A given Part should only execute its topology one time for all instances.
+        let body = self.body.get_or_init(|| {
+            let body = (self.constructor)();
+            dummy_engine_convert_body_to_part_definition(self.part_id, body.id);
+            body
+        });
+        // The body topology exists: now make an instance of it and yield an ID back to KCL.
+        let instance_id = dummy_engine_make_part_instance(self.part_id);
         PartInstance {
             part_id: self.part_id,
-            instance_id: InstanceId::new(),
-            body: self.body.clone(),
+            instance_id,
+            body: body.clone(),
             anchors: Vec::new(),
         }
     }
+}
+
+// Tell engine to take the body "offscreen", put it somewhere, none of our business where.
+fn dummy_engine_convert_body_to_part_definition(part_id: PartId, body_id: BodyId) {}
+
+fn dummy_engine_make_part_instance(part_id: PartId) -> InstanceId {
+    InstanceId::new()
 }
 
 #[derive(Clone)]
 struct PartInstance {
     part_id: PartId,
     instance_id: InstanceId,
-    body: Solid,
+    body: Body,
     anchors: Vec<Anchor>,
 }
 
@@ -434,29 +468,6 @@ fn dummy_engine_make_unsolved_instances(
         assembly_input.anchors.clone(),
     )
 }
-
-// enum Component<'a> {
-//     Part(Part),
-//     Assembly(AssemblyDefinition<'a>),
-// }
-
-// struct ComponentList<'a> {
-//     list: Vec<Component<'a>>,
-// }
-//
-// impl<'a> ComponentList<'a> {
-//     fn new() -> Self {
-//         Self { list: Vec::new() }
-//     }
-//     fn with_part(mut self, part: Part) -> Self {
-//         self.list.push(Component::Part(part));
-//         self
-//     }
-//     fn with_assembly(mut self, assy: AssemblyDefinition<'a>) -> Self {
-//         self.list.push(Component::Assembly(assy));
-//         self
-//     }
-// }
 
 #[derive(Clone)]
 enum ComponentInstance {
