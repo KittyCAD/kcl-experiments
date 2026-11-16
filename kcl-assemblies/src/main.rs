@@ -2,42 +2,63 @@ use std::{cell::OnceCell, collections::HashMap};
 
 fn main() {
     // Parts take a function that lazily yields one or more Bodies.
-    let part = Part::new(|| Body::new());
-    let part2 = Part::new(|| Body::new()); // <-- this body construction never runs because it is not used by a program target
-    let part3 = Part::new(|| Body::new()); // <-- ditto
-    let assy = AssemblyDefinition::new("first assy", || {
-        let instance = part.instance();
-        let instance2 = part.instance();
+    // omitting details of body creation for brevity
+    let dog_body = Part::new(|| Body::new());
+    let dog_upper_leg = Part::new(|| Body::new());
+    let dog_lower_leg = Part::new(|| Body::new());
+    let scene_brick = Part::new(|| Body::new());
 
-        let a = Anchor::new(&instance);
-        let b = Anchor::new(&instance2);
-        let mate = Mate::new(&a, &b);
+    let some_unused_part = Part::new(|| Body::new()); // <-- this body construction never runs because it is not used by a program target
+    let another_unused_part = Part::new(|| Body::new()); // <-- ditto
 
-        let pose = Pose::new();
+    // Assemblies take parts or other assemblies, and instance them into the definition.
+    let dog_leg_assy = AssemblyDefinition::new("first assy", || {
+        let upper_leg = dog_upper_leg.instance();
+        let lower_leg = dog_lower_leg.instance();
+
+        // for brevity, omitting other anchor creation details for now
+        let knee_upper_anchor = Anchor::new(&upper_leg);
+        let knee_lower_anchor = Anchor::new(&lower_leg);
+        let revolve_mate = Mate::new(
+            &knee_upper_anchor,
+            upper_leg.instance_id,
+            &knee_lower_anchor,
+            lower_leg.instance_id,
+        );
+
+        let pose_extended_leg = Pose::new();
+        let pose_bent_leg = Pose::new();
 
         // we'd like the block to handle this bit implicitly,
         // and let items be addressed by variable name rather than vec index
-        AssemblyInput::new(
-            vec![instance.into(), instance2.into()],
-            vec![a, b],
-            vec![mate],
-            vec![pose],
+        AssemblyBlockOutput::new(
+            vec![upper_leg.into(), lower_leg.into()],
+            vec![knee_upper_anchor, knee_lower_anchor],
+            vec![revolve_mate],
+            vec![pose_extended_leg, pose_bent_leg],
         )
     });
 
-    let assy2 = AssemblyDefinition::new("second assy", || {
+    let dog = AssemblyDefinition::new("second assy", || {
         // make the components of this subassembly concrete (execute required part modeling & subassemblies)
         // so that we have the user "input" for instancing.
 
-        // make a copy of the concrete subassembly and solve it with this pose
-        let frozen_subassembly = assy.with_pose(|poses| &poses[0]).solved();
+        // make 4 copies of the same subassembly with the same pose.
+        let dog_legs: Vec<AssemblyInstance<Solved>> = (0..3)
+            .map(|_| dog_leg_assy.with_pose(|poses| &poses[0]).solved())
+            .collect();
         // make a copy of the concrete subassembly with a chosen base pose but solve it with the rest of the parent assembly.
-        let moving_subassembly = assy.with_pose(|poses| &poses[1]);
-        let some_part = part.instance();
+        let moving_subassembly = dog_leg_assy.with_pose(|poses| &poses[1]);
+        let torso = dog_body.instance();
 
-        let anchor = Anchor::new(&some_part);
+        let anchor = Anchor::new(&torso);
         // you can reference anchors from subassemblies - in KCL, by name.
-        let fastened = Mate::new(&anchor, &frozen_subassembly.anchors[1]);
+        let fastened = Mate::new(
+            &anchor,
+            torso.instance_id,
+            &dog_legs[0].anchors[1],
+            dog_legs[0].instance_id,
+        );
 
         // a Pose is intended to represent the transforms for influencing solve work not yet completed.
         // All components of subassemblies not yet solved might as well be, in solver & pose terms, direct components of this assembly.
@@ -45,12 +66,11 @@ fn main() {
         let pose = Pose::new();
         let other_pose = Pose::new();
         let third_pose = Pose::new();
-        AssemblyInput::new(
-            vec![
-                moving_subassembly.into(),
-                frozen_subassembly.into(),
-                some_part.into(),
-            ],
+        let mut leg_components: Vec<(InstanceId, ComponentInstance)> =
+            dog_legs.iter().cloned().map(|leg| leg.into()).collect();
+        leg_components.append(&mut vec![moving_subassembly.into(), torso.into()]);
+        AssemblyBlockOutput::new(
+            leg_components,
             vec![anchor],
             vec![fastened],
             vec![pose, other_pose, third_pose],
@@ -62,7 +82,7 @@ fn main() {
     // We can execute multiple Scenes with overlapping dependencies without duplicating work.
     // Common case is multiple views of an assembly, or
     let scene = Scene::assembly("my assembly", || {
-        let solved_assembly = assy2.with_pose(|poses| &poses[0]).solved();
+        let solved_assembly = dog.with_pose(|poses| &poses[0]).solved();
 
         // note that hide/show state is unique to a Scene.
         // You could have another Scene, same assembly, same Pose, same Solve, but with different visibility state.
@@ -128,14 +148,19 @@ impl AssemblyId {
     }
 }
 // concrete assembly or part instances
-// no Copy impl because it shouldn't be common to reuse the same ID in a new place.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+// InstanceId is globally unique.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct InstanceId(uuid::Uuid);
 
 impl InstanceId {
     fn new() -> Self {
         Self(uuid::Uuid::new_v4())
     }
+}
+
+struct InstanceTree {
+    instance: InstanceId,
+    children: Vec<Box<InstanceTree>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -203,24 +228,29 @@ struct PartInstance {
     part_id: PartId,
     instance_id: InstanceId,
     body: Body,
+    // anchors are assigned to body topologies but are referenceable from the part instance
     anchors: Vec<Anchor>,
 }
 
+// make describing assembly blocks easier
+trait AssemblyBlock: Fn() -> AssemblyBlockOutput {}
+impl<F> AssemblyBlock for F where F: Fn() -> AssemblyBlockOutput {}
+
 #[derive(Clone)]
-struct AssemblyDefinition<'a, Constructor: Fn() -> AssemblyInput> {
+struct AssemblyDefinition<'a, Block: AssemblyBlock> {
     assembly_id: AssemblyId,
     name: &'a str,
-    constructor: Constructor,
-    inputs: OnceCell<AssemblyInput>,
+    constructor: Block,
+    block_output: OnceCell<AssemblyBlockOutput>,
 }
 
-impl<'a, Constructor: Fn() -> AssemblyInput> AssemblyDefinition<'a, Constructor> {
-    fn new(name: &'a str, constructor: Constructor) -> AssemblyDefinition<'a, Constructor> {
+impl<'a, Block: AssemblyBlock> AssemblyDefinition<'a, Block> {
+    fn new(name: &'a str, constructor: Block) -> AssemblyDefinition<'a, Block> {
         AssemblyDefinition {
             assembly_id: AssemblyId::new(),
             name,
             constructor,
-            inputs: OnceCell::new(),
+            block_output: OnceCell::new(),
         }
     }
 
@@ -228,7 +258,7 @@ impl<'a, Constructor: Fn() -> AssemblyInput> AssemblyDefinition<'a, Constructor>
     where
         F: Fn(&[Pose]) -> &Pose,
     {
-        let input = self.inputs.get_or_init(|| (self.constructor)());
+        let input = self.block_output.get_or_init(|| (self.constructor)());
         let pose = pose_fn(&input.poses);
         // we go to the engine and ask for fresh instances of the assembly input data (components, anchors, mates)
         let (components, anchors) = dummy_engine_make_unsolved_instances(&input);
@@ -266,14 +296,14 @@ impl<'a, Constructor: Fn() -> AssemblyInput> AssemblyDefinition<'a, Constructor>
 }
 
 #[derive(Clone)]
-struct AssemblyInput {
+struct AssemblyBlockOutput {
     components: Vec<(InstanceId, ComponentInstance)>,
     anchors: Vec<Anchor>,
     mates: Vec<Mate>,
     poses: Vec<Pose>,
 }
 
-impl AssemblyInput {
+impl AssemblyBlockOutput {
     fn new(
         components: Vec<(InstanceId, ComponentInstance)>,
         anchors: Vec<Anchor>,
@@ -400,7 +430,7 @@ impl SolvedTransforms {
     }
 }
 
-trait AssemblyInstanceState {}
+trait AssemblyInstanceState: Clone {}
 #[derive(Clone)]
 struct Unsolved {
     base_pose: Pose,
@@ -450,6 +480,22 @@ impl AssemblyInstance<Unsolved> {
     }
 }
 
+impl<T: AssemblyInstanceState> AssemblyInstance<T> {
+    // when we duplicate what happens?
+    // it's just a new reference to the source.
+    fn duplicate(&self) -> Self {
+        let instance_id = dummy_engine_duplicate(self.instance_id);
+        AssemblyInstance {
+            assembly_id: self.assembly_id,
+            instance_id,
+            anchors: self.anchors.clone(),
+            components: self.components.clone(),
+            mates: self.mates.clone(),
+            state: self.state.clone(),
+        }
+    }
+}
+
 fn dummy_engine_solve_call(
     _components: &[&ComponentInstance],
     _anchors: &[Anchor],
@@ -461,12 +507,16 @@ fn dummy_engine_solve_call(
 }
 
 fn dummy_engine_make_unsolved_instances(
-    assembly_input: &AssemblyInput,
+    assembly_input: &AssemblyBlockOutput,
 ) -> (Vec<(InstanceId, ComponentInstance)>, Vec<Anchor>) {
     (
         assembly_input.components.clone(),
         assembly_input.anchors.clone(),
     )
+}
+
+fn dummy_engine_duplicate(instance_id: InstanceId) -> InstanceId {
+    InstanceId::new()
 }
 
 #[derive(Clone)]
@@ -506,13 +556,17 @@ impl From<AssemblyInstance<Unsolved>> for (InstanceId, ComponentInstance) {
 #[derive(Clone)]
 struct Mate {
     a: Anchor,
+    a_owner: InstanceId,
     b: Anchor,
+    b_owner: InstanceId,
 }
 impl Mate {
-    fn new(a: &Anchor, b: &Anchor) -> Self {
+    fn new(a: &Anchor, a_owner: InstanceId, b: &Anchor, b_owner: InstanceId) -> Self {
         Self {
             a: a.clone(),
+            a_owner,
             b: b.clone(),
+            b_owner,
         }
     }
 }
