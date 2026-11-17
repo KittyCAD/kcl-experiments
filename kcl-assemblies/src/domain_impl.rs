@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::domain::*;
 use crate::engine_api;
 
+/// Lazy builder for PartDefinition for testing purposes
 pub struct KclPart<LazyTopologyBlock: Fn() -> Body> {
     block: LazyTopologyBlock,
     part: OnceCell<PartDefinition>,
@@ -26,6 +27,7 @@ impl<Constructor: Fn() -> Body> KclPart<Constructor> {
     }
 }
 
+/// actual app logic
 impl PartDefinition {
     pub fn instance(&self) -> PartInstance {
         // The body topology exists: now make an instance of it and yield an ID back to KCL.
@@ -44,6 +46,7 @@ impl PartDefinition {
 trait AssemblyBlock: Fn() -> AssemblyDefinition {}
 impl<F> AssemblyBlock for F where F: Fn() -> AssemblyDefinition {}
 
+/// Lazy builder for AssemblyDefinition for testing purposes
 #[derive(Clone)]
 pub struct KclAssembly<'a, Block: AssemblyBlock> {
     assembly_id: AssemblyId,
@@ -197,6 +200,7 @@ impl Mate {
 
 impl Anchor {
     pub fn new(on: PartInstanceId) -> Self {
+        // lookup PartInstanceId in a graph, find the topology available, and build a query for it.
         Self {
             id: EntityId::new(),
             on,

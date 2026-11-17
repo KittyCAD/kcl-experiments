@@ -1,9 +1,14 @@
 use crate::domain::*;
 
+pub fn create_anchor(_placement: AnchorPlacement) -> EntityId {
+    EntityId::new()
+}
+
 pub fn define_part(from: Body) -> PartDefinition {
     PartDefinition {
         id: PartId::new(),
         body: from,
+        primitive_anchors: Vec::new(),
         metadata: (),
     }
 }

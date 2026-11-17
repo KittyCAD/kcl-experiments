@@ -20,6 +20,9 @@ pub struct AssemblyInstanceId(pub uuid::Uuid);
 pub struct EntityId(pub uuid::Uuid);
 
 #[derive(Clone)]
+pub struct EdgeSpecifier;
+
+#[derive(Clone)]
 pub struct Body {
     pub id: EntityId,
     pub topology: (),
@@ -32,6 +35,8 @@ pub struct PartDefinition {
     /// do we allow multiple bodies fixed in relation to each other?
     /// Or is that a separate CompoundPartDefinition type?
     pub body: Body,
+    /// the primitive anchors have no InstanceId yet associated with them
+    pub primitive_anchors: Vec<PrimitiveAnchor>,
     /// there's interest in part metadata being exportable in STEP, etc, which means it must exist on engine.
     pub metadata: (),
 }
@@ -45,16 +50,90 @@ pub struct PartInstance {
     pub anchors: Vec<Anchor>,
 }
 
+/// The primitive Anchor does not know about an InstanceId.
+/// it was created during modeling operations.
+/// It may be stored in a PartDefinition and converted to an Anchor
+/// When that part is instanced.
 #[derive(Clone)]
-pub struct ModelingAnchor {
+pub struct PrimitiveAnchor {
     pub id: EntityId,
+    pub placement: AnchorPlacement,
 }
 
+/// the Anchor is mate-ready with both anchor and Instance IDs.
+/// It can be created directly in an assembly block,
+/// or derived from a primitiveAnchor stored in a PartDefinition when that part
+/// is instanced and an InstanceId created to associate with.
 #[derive(Clone)]
 pub struct Anchor {
     pub id: EntityId,
     pub on: PartInstanceId,
-    pub flip_z: bool,
+    pub placement: AnchorPlacement,
+}
+
+/// if the server receives an AnchorPlacement it is unable to resolve,
+/// it should return an error.
+#[derive(Clone)]
+pub struct AnchorPlacement {
+    /// first compute location
+    location: DerivedAnchorLocation,
+    /// then compute orientation, which depends on location
+    orientation: DerivedAnchorOrientation,
+    /// then apply adjustments.
+    /// We assume the user wants these to override the computed orientation.
+    adjustments: AnchorAdjustment,
+    /// the user may want to re-apply orientation after the location adjustments.
+    reapply_orientation: bool,
+    /// finally, you may want to flip the z axis.
+    flip_z: bool,
+}
+
+#[derive(Clone)]
+pub enum DerivedAnchorLocation {
+    /// ideally these edge derivations apply to sketch edges as well
+    EdgeMidpoint(EdgeSpecifier),
+    EdgeStart(EdgeSpecifier),
+    EdgeEnd(EdgeSpecifier),
+    EdgeCircularCenter(EdgeSpecifier),
+    /// intersection of the tangent directions of a circular arc's endpoints
+    EdgeCircularVirtualCorner(EdgeSpecifier),
+    FaceCentroid(EntityId),
+    /// unsure what identifying information would be used to locate a sketch point
+    SketchPoint(()),
+    /// copy from existing Anchor
+    Anchor(EntityId),
+    Between {
+        a: Box<DerivedAnchorLocation>,
+        b: Box<DerivedAnchorLocation>,
+    },
+}
+
+#[derive(Clone)]
+pub enum DerivedAnchorOrientation {
+    /// The face might not be planar.
+    /// If not planar, sample edge normal at the closest point on face to AnchorLocation.
+    FaceNormal(EntityId),
+    SketchNormal(EntityId),
+    /// The edge might not be a line.
+    /// If not line, sample edge direction at the AnchorLocation
+    EdgeDirection(EdgeSpecifier),
+    /// copy from existing Anchor
+    Anchor(EntityId),
+    Average {
+        a: Box<DerivedAnchorOrientation>,
+        b: Box<DerivedAnchorOrientation>,
+    },
+}
+
+#[derive(Clone)]
+pub struct AnchorAdjustment {
+    x: f64,
+    y: f64,
+    z: f64,
+    /// These are probably exposed in KCL as an enum which maps to 90 deg increments.
+    /// To avoid gimbal lock, don't permit rotations on y
+    rotate_about_z: f64,
+    rotate_about_x: f64,
 }
 
 #[derive(Clone)]
