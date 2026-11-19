@@ -138,14 +138,14 @@ A measurement type (e.g. `Force` or `Distance`) may have a lot of different cons
  1. A predefined unit, e.g.
      a. `Force.Newton(1)`
      b. `Force.Pound(0.224809)`
-     c. `Distance.Metre(1)`
+     c. `Distance.Meter(1)`
      d. `Distance.Yard(0.9144)`
  2. A combination of different units, using a standard mathematical definition, e.g.
-     a. `Force.mdt(Mass.Kilogram(1), Distance.Metre(1), Time.Second(1))` (force = mass * distance * time)
-     b. `Area.rectangle(Distance.Metre(1), Distance.Metre(2))` (area = distance_x * distance_y)
-     c. `Area.rectangle(Distance.Metre(1), Distance.Yard(1.8288))` (same equation as above, but mixing imperial and metric)
+     a. `Force.mdt(Mass.Kilogram(1), Distance.Meter(1), Time.Second(1))` (force = mass * distance * time)
+     b. `Area.rectangle(Distance.Meter(1), Distance.Meter(2))` (area = distance_x * distance_y)
+     c. `Area.rectangle(Distance.Meter(1), Distance.Yard(1.8288))` (same equation as above, but mixing imperial and metric)
 
-Both these expressions have the same _type_ (`Force`) but use different _constructors_ to give the specific value. For more about syntax, see the Syntax section below.
+Both these expressions have the same _type_ (`Force`) but use different _constructors_ to give the specific value. KCL has a few shorthand notations to make units more convenient. See the Syntax section below for more.
 
 #### Operations on measurements
 
@@ -296,8 +296,13 @@ This is an expression which evaluates `can_of_beans` with its two input paramete
 Some units have aliases, so you could also write
 
 ```kcl
-can_of_beans(Cm(10), Ft(1))
+can_of_beans(10.cm, 1.ft)
 ```
+
+These are all different ways of writing the same distance:
+ - `Distance.Meter(1)` -- fully spelled out, using normal KCL syntax.
+ - `1.Meter` -- using "unit suffix" notation, which is syntactical sugar (aka shorthand) for the above
+ - `1.m` -- very commonly-used units have a second, shorter alias.
 
 See the [docs](units) for all units and aliases.
 
@@ -305,7 +310,7 @@ Every KCL function body is a single expression. If a function body gets really b
 
 ```kcl
 let
-  can_radius = Cm(10)
+  can_radius = 10.cm
   can_height = can_radius * 5
 in can_of_beans(can_radius, can_height)
 ```
@@ -319,13 +324,13 @@ KCL doesn't have any mutation or changes, so there aren't any variables. Files c
 Other languages have named constants and variables. KCL doesn't have variables (because the language describes unchanging geometry and physical characteristics of real-world objects). But it _does_ have named constants. Here's how you declare them.
 
 ```kcl
-my_can = can_of_beans(Cm(10), Ft(1))
+my_can = can_of_beans(10.cm, 1.ft)
 ```
 
 This declares a named constant called `my_can`, which is the result of calling the `can_of_beans` function we defined above. KCL compiler inferred the type, but you can add a type annotation if you want to:
 
 ```kcl
-my_can: Solid3d = can_of_beans(Cm(10), Ft(1))
+my_can: Solid3d = can_of_beans(10.cm, 1.ft)
 ```
 
 This named constant is actually just syntactic sugar for a function that takes 0 parameters. After all, functions called with the same inputs always return the same value -- they're fully deterministic. So a function with 0 parameters is just a function that always returns a constant value. Or, to simplify: it _is_ a constant value. 
@@ -333,7 +338,7 @@ This named constant is actually just syntactic sugar for a function that takes 0
 Without the syntactic sugar, `my_can` could be declared like this:
 
 ```kcl
-my_can = (-> Solid3d) => can_of_beans(Cm(10), Ft(1))
+my_can = (-> Solid3d) => can_of_beans(10.cm, 1.ft)
 ```
 
 Note the function signature. Function signatures are always (parameters -> return type), but here we have no parameters, so the function signature just omits them.
@@ -386,10 +391,10 @@ You pass keyword arguments like this:
 
 ```kcl
 /// Using a keyword argument.
-sphere(Distance::metre(1), material = Plastic.ISO1234)
+sphere(1.m, material = Plastic.ISO1234)
 
 /// Or, don't use a keyword argument and rely on the default.
-sphere(Distance::metre(1))
+sphere(1.m)
 ```
 
 Keyword arguments help keep your KCL programs readable, and allows us to add new features to the standard library in a backwards-compatible way. Suppose that KittyCAD releases KCL 1.4, which adds a new positional argument to a standard library function `sphere`. Any programs using the definition of `sphere` from KCL 1.3 would stop compiling when you upgrade to 1.4 (because they're missing a parameter to `sphere`). But if we add the new parameter as a _keyword parameter_, your existing programs will keep working -- they'll just use the default value for that parameter.
